@@ -69,6 +69,8 @@ public final class GlyphWallpaperService extends WallpaperService {
             handler.removeCallbacks(drawRunnable);
             handler.removeCallbacks(revealRunnable);
             if (visible) {
+                long now = SystemClock.uptimeMillis();
+                experience.wake(now);
                 DemoCatalog.Theme configuredTheme = DemoPreferences.theme(GlyphWallpaperService.this);
                 int configuredEvent = DemoPreferences.eventIndex(GlyphWallpaperService.this);
                 if (configuredTheme != theme || configuredEvent != eventIndex) {
@@ -201,7 +203,7 @@ public final class GlyphWallpaperService extends WallpaperService {
                 }
                 ExperienceController.Frame frame = experience.frame(now);
                 GlyphSceneRenderer.draw(canvas, localScene, frame, now, false);
-                if (frame.needsAnimation) handler.postDelayed(drawRunnable, 16L);
+                if (frame.needsAnimation) handler.postDelayed(drawRunnable, frame.frameDelayMs);
             } finally {
                 if (canvas != null) holder.unlockCanvasAndPost(canvas);
             }

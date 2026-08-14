@@ -15,24 +15,41 @@ final class ExperienceController {
     static final class Frame {
         final float revealProgress;
         final float resultProgress;
+        final float wakeProgress;
         final boolean listening;
         final boolean needsAnimation;
+        final int frameDelayMs;
         final State state;
 
-        Frame(float revealProgress, float resultProgress, boolean listening, boolean needsAnimation, State state) {
+        Frame(
+                float revealProgress,
+                float resultProgress,
+                float wakeProgress,
+                boolean listening,
+                boolean needsAnimation,
+                int frameDelayMs,
+                State state
+        ) {
             this.revealProgress = revealProgress;
             this.resultProgress = resultProgress;
+            this.wakeProgress = wakeProgress;
             this.listening = listening;
             this.needsAnimation = needsAnimation;
+            this.frameDelayMs = frameDelayMs;
             this.state = state;
         }
     }
 
     private State state = State.AMBIENT;
     private long stateStartedAtMs = 0L;
+    private long wakeStartedAtMs = 0L;
 
     State state() {
         return state;
+    }
+
+    void wake(long nowMs) {
+        wakeStartedAtMs = nowMs;
     }
 
     void reveal(long nowMs) {
@@ -60,16 +77,16 @@ final class ExperienceController {
         float reveal = 0f;
         float result = 0f;
         boolean listening = false;
-        boolean animate = false;
+        boolean transition = false;
 
         switch (state) {
             case AMBIENT:
                 break;
             case REVEALING: {
-                float raw = (nowMs - stateStartedAtMs) / 1750f;
+                float raw = (nowMs - stateStartedAtMs) / 1850f;
                 reveal = GlyphMath.clamp01(raw);
-                animate = reveal < 1f;
-                if (!animate) state = State.FOCUSED;
+                transition = reveal < 1f;
+                if (!transition) state = State.FOCUSED;
                 break;
             }
             case FOCUSED:
@@ -78,7 +95,7 @@ final class ExperienceController {
             case LISTENING: {
                 reveal = 1f;
                 listening = true;
-                animate = true;
+                transition = true;
                 if (nowMs - stateStartedAtMs >= 1650L) {
                     state = State.RESULT_TRANSITION;
                     stateStartedAtMs = nowMs;
@@ -89,8 +106,8 @@ final class ExperienceController {
             case RESULT_TRANSITION: {
                 reveal = 1f;
                 result = GlyphMath.clamp01((nowMs - stateStartedAtMs) / 1000f);
-                animate = result < 1f;
-                if (!animate) state = State.RESULT;
+                transition = result < 1f;
+                if (!transition) state = State.RESULT;
                 break;
             }
             case RESULT:
@@ -98,18 +115,27 @@ final class ExperienceController {
                 result = 1f;
                 break;
             case COLLAPSING: {
-                reveal = 1f - GlyphMath.clamp01((nowMs - stateStartedAtMs) / 1250f);
-                animate = reveal > 0f;
-                if (!animate) state = State.AMBIENT;
+                reveal = 1f - GlyphMath.clamp01((nowMs - stateStartedAtMs) / 1350f);
+                transition = reveal > 0f;
+                if (!transition) state = State.AMBIENT;
                 break;
             }
         }
 
+        float wake = wakeStartedAtMs <= 0L
+                ? 1f
+                : GlyphMath.clamp01((nowMs - wakeStartedAtMs) / 2200f);
+        boolean wakeAnimating = wake < 1f;
+        boolean animate = transition || listening || wakeAnimating || state == State.AMBIENT || state == State.FOCUSED || state == State.RESULT;
+        int delay = transition || listening || wakeAnimating ? 16 : 33;
+
         return new Frame(
                 GlyphMath.smooth(reveal),
                 GlyphMath.smooth(result),
+                GlyphMath.smooth(wake),
                 listening,
-                animate || listening,
+                animate,
+                delay,
                 state
         );
     }

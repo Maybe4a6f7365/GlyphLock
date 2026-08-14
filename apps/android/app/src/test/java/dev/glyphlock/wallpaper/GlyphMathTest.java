@@ -14,6 +14,18 @@ public class GlyphMathTest {
     }
 
     @Test
+    public void staggeredProgressWaitsAndCompletes() {
+        assertEquals(0f, GlyphMath.staggeredProgress(0.1f, 0.2f, 0.5f), 0f);
+        assertTrue(GlyphMath.staggeredProgress(0.45f, 0.2f, 0.5f) > 0f);
+        assertEquals(1f, GlyphMath.staggeredProgress(0.9f, 0.2f, 0.5f), 0f);
+    }
+
+    @Test
+    public void approachMovesTowardTarget() {
+        assertEquals(2.5f, GlyphMath.approach(0f, 10f, 0.25f), 0.0001f);
+    }
+
+    @Test
     public void smoothIsMonotonicForRepresentativeSamples() {
         float previous = -1f;
         for (int i = 0; i <= 100; i++) {

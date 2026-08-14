@@ -1,10 +1,10 @@
 {
   "name": "@glyphlock/visual-lab",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
-    "build": "tsc && node scripts/copy-static.mjs",
+    "build": "node scripts/copy-static.mjs && tsc",
     "serve": "python3 -m http.server 4173 -d dist"
   },
   "devDependencies": {

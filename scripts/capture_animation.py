@@ -56,7 +56,7 @@ def main() -> None:
             page.set_content(html, wait_until='load', timeout=180_000)
             page.wait_for_function("document.documentElement.dataset.ready === 'true'", timeout=180_000)
             for index, t in enumerate(frames):
-                page.evaluate("t => window.__glyphlock.setCaptureTime(t)", t)
+                page.evaluate("({t, ms}) => { window.__glyphlock.setCaptureTime(t); window.__glyphlock.setCaptureMotionTime(ms); }", {'t': t, 'ms': index * 1000 / args.fps})
                 page.screenshot(path=str(frame_dir / f'frame-{index:04d}.png'), full_page=False)
             browser.close()
 
