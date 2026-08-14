@@ -22,7 +22,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .bootstrap/cinematic-motion.patch.gz.b64.part* > /tmp/cinematic-motion.patch.gz.b64
+          cat \
+            .bootstrap/cinematic-motion.patch.gz.b64.part00 \
+            .bootstrap/cinematic-motion.patch.gz.b64.part01 \
+            .bootstrap/cinematic-motion.patch.gz.b64.part02a \
+            .bootstrap/cinematic-motion.patch.gz.b64.part02b \
+            .bootstrap/cinematic-motion.patch.gz.b64.part03 \
+            > /tmp/cinematic-motion.patch.gz.b64
           echo "64de9702b0eeee5fbb3b6fee28896f9fffde887d44ca88fb768facf8aaa02d28  /tmp/cinematic-motion.patch.gz.b64" | sha256sum --check --strict
           base64 --decode /tmp/cinematic-motion.patch.gz.b64 > /tmp/cinematic-motion.patch.gz
           echo "36f0433ea444404f8ead362d6e3399e1640796f974638b7c759d9cfe07cbf985  /tmp/cinematic-motion.patch.gz" | sha256sum --check --strict
