@@ -31,9 +31,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tar -xzf /tmp/glyphlock-source.tar.gz -C .
+          mkdir -p /tmp/glyphlock-source
+          tar -xzf /tmp/glyphlock-source.tar.gz -C /tmp/glyphlock-source
+
+          # GitHub Actions tokens cannot create or modify workflow files. Import
+          # the application source first; CI is installed separately through
+          # the authenticated GitHub connector after this one-time run.
+          rsync -a --exclude '.github/workflows/' /tmp/glyphlock-source/ ./
           rm -rf .bootstrap
-          rm -f .github/workflows/bootstrap-import.yml
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
