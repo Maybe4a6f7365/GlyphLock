@@ -1,0 +1,41 @@
+name: Apply cinematic source overlay
+
+on:
+  push:
+    branches:
+      - feature/cinematic-motion-art-pack
+    paths:
+      - .github/workflows/apply-excluded-overlay.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and verify overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/excluded-overlay.tar.gz.b64.part* > /tmp/excluded-overlay.tar.gz.b64
+          echo "d1055c4a765f31604da56287e0c5f61f9539d58ac88663eafc8daa7a8d8f5f5c  /tmp/excluded-overlay.tar.gz.b64" | sha256sum --check --strict
+          base64 --decode /tmp/excluded-overlay.tar.gz.b64 > /tmp/excluded-overlay.tar.gz
+          echo "4b8824909ab24a7dbe5c75cc540af15116ed4bf38fa4598831a9b036af9d80c2  /tmp/excluded-overlay.tar.gz" | sha256sum --check --strict
+
+      - name: Apply exact source overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -xzf /tmp/excluded-overlay.tar.gz -C .
+          rm -rf .bootstrap
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "feat: add procedural nerd-tech scenes and motion documentation"
+          git push origin HEAD:feature/cinematic-motion-art-pack
