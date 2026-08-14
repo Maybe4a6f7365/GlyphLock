@@ -1,6 +1,5 @@
 package dev.glyphlock.wallpaper;
 
-import android.app.WallpaperManager;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -32,12 +31,6 @@ public final class GlyphWallpaperService extends WallpaperService {
         private final AtomicInteger generation = new AtomicInteger();
         private final ExperienceController experience = new ExperienceController();
         private final TouchInterpreter touch = new TouchInterpreter(this);
-        private final Runnable drawRunnable = this::drawFrame;
-        private final Runnable revealRunnable = () -> {
-            if (!visible) return;
-            experience.reveal(SystemClock.uptimeMillis());
-            drawFrame();
-        };
 
         private volatile GlyphSceneRenderer.Scene scene;
         private boolean visible;
@@ -45,6 +38,13 @@ public final class GlyphWallpaperService extends WallpaperService {
         private int surfaceHeight;
         private int eventIndex;
         private DemoCatalog.Theme theme;
+
+        private final Runnable drawRunnable = this::drawFrame;
+        private final Runnable revealRunnable = () -> {
+            if (!visible) return;
+            experience.reveal(SystemClock.uptimeMillis());
+            drawFrame();
+        };
 
         @Override
         public void onCreate(SurfaceHolder surfaceHolder) {
@@ -217,7 +217,12 @@ public final class GlyphWallpaperService extends WallpaperService {
             paint.setTextSize(canvas.getWidth() * 0.022f);
             float pulse = 0.35f + 0.25f * (float) Math.sin(now / 260f);
             paint.setColor(Color.argb(Math.round(255f * pulse), 159, 221, 238));
-            canvas.drawText("ASSEMBLING GLYPH FIELD", canvas.getWidth() / 2f, canvas.getHeight() / 2f, paint);
+            canvas.drawText(
+                    "ASSEMBLING GLYPH FIELD",
+                    canvas.getWidth() / 2f,
+                    canvas.getHeight() / 2f,
+                    paint
+            );
         }
     }
 }
