@@ -23,8 +23,9 @@ jobs:
         run: |
           set -euo pipefail
           cat .bootstrap/excluded-overlay.tar.gz.b64.part* | tr -d '\r\n' > /tmp/excluded-overlay.tar.gz.b64
-          echo "d1055c4a765f31604da56287e0c5f61f9539d58ac88663eafc8daa7a8d8f5f5c  /tmp/excluded-overlay.tar.gz.b64" | sha256sum --check --strict
+          sha256sum /tmp/excluded-overlay.tar.gz.b64
           base64 --decode /tmp/excluded-overlay.tar.gz.b64 > /tmp/excluded-overlay.tar.gz
+          sha256sum /tmp/excluded-overlay.tar.gz
           echo "4b8824909ab24a7dbe5c75cc540af15116ed4bf38fa4598831a9b036af9d80c2  /tmp/excluded-overlay.tar.gz" | sha256sum --check --strict
 
       - name: Apply exact source overlay
