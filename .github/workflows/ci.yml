@@ -1,0 +1,58 @@
+name: Prototype 0 CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r scripts/requirements.txt
+      - run: python scripts/generate_scene_masks.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - working-directory: apps/visual-lab
+        run: npm install --no-audit --no-fund
+      - working-directory: apps/visual-lab
+        run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: glyphlock-visual-lab
+          path: apps/visual-lab/dist
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r scripts/requirements.txt
+      - run: python scripts/generate_scene_masks.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - run: yes | sdkmanager --licenses >/dev/null
+      - run: sdkmanager "platforms;android-37" "build-tools;37.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.4.1
+      - working-directory: apps/android
+        run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GlyphLock-demo-debug-apk
+          path: apps/android/app/build/outputs/apk/debug/app-debug.apk
