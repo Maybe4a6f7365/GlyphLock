@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "module": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "ES2022.Intl"],
+    "skipLibCheck": true,
+    "moduleResolution": "Bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "sourceMap": true
+  },
+  "include": ["src"]
+}

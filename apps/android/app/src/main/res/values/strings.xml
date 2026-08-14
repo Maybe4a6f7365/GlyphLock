@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">GlyphLock</string>
+    <string name="wallpaper_description">Generative glyph wallpaper with local demo events.</string>
+    <string name="wallpaper_name">GlyphLock Prototype</string>
+</resources>

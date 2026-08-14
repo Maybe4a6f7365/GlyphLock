@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#030405" />
+    <title>GlyphLock Visual Lab</title>
+  </head>
+  <body>
+    <main id="app">
+      <section class="stage" aria-label="GlyphLock wallpaper prototype">
+        <canvas id="glyph-canvas"></canvas>
+        <div class="phone-glass" aria-hidden="true"></div>
+        <div class="safe-clock" aria-hidden="true">
+          <span id="clock">09:41</span>
+          <span id="date">THU · AUG 13</span>
+        </div>
+        <div class="gesture-hint" aria-hidden="true">
+          <span>HOLD</span><i></i>
+        </div>
+      </section>
+      <aside class="controls" id="controls">
+        <div class="brand">
+          <strong>GLYPHLOCK</strong>
+          <span>visual proof · local demo events</span>
+        </div>
+        <div class="control-group">
+          <label>Artwork</label>
+          <div class="segmented" id="theme-controls"></div>
+        </div>
+        <div class="control-group">
+          <label>Demo event</label>
+          <div class="event-list" id="event-controls"></div>
+        </div>
+        <div class="control-group compact">
+          <button id="play-reveal">Wake + reveal</button>
+          <button id="collapse">Return to art</button>
+        </div>
+        <p class="instructions">
+          Tap the lower command zone to focus. Hold it to simulate voice. Swipe left/right to change events, or press the arrow keys.
+        </p>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
