@@ -9,7 +9,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "assets" / "scenes"
+OUT_WEB = ROOT / "apps" / "visual-lab" / "public" / "assets"
+OUT_ANDROID = ROOT / "apps" / "android" / "app" / "src" / "main" / "res" / "drawable-nodpi"
 W, H = 1080, 2400
 
 
@@ -186,13 +187,194 @@ def orbit() -> Image.Image:
     return add_grain(img, 404, 9)
 
 
+
+def edge_fade(img: Image.Image, horizontal: float = 150.0, vertical: float = 190.0, floor: float = 0.24) -> Image.Image:
+    arr = np.asarray(img, dtype=np.float32)
+    yy, xx = np.mgrid[0:H, 0:W]
+    edge = np.minimum.reduce([
+        xx / horizontal,
+        (W - 1 - xx) / horizontal,
+        yy / vertical,
+        (H - 1 - yy) / vertical,
+    ])
+    fade = np.clip(edge, floor, 1.0)
+    return Image.fromarray(np.uint8(np.clip(arr * fade, 0, 255)), "L")
+
+
+def polar(cx: float, cy: float, radius: float, angle: float) -> tuple[int, int]:
+    return int(cx + math.cos(angle) * radius), int(cy + math.sin(angle) * radius)
+
+
+def neural_halo() -> Image.Image:
+    base, soft, detail, s, d = layered_canvas()
+    cx, cy = W // 2, 840
+    rng = random.Random(8841)
+    for r, fill, width in [(116, 210, 7), (205, 120, 5), (330, 58, 3), (505, 28, 2), (730, 14, 2)]:
+        d.ellipse((cx-r, cy-r, cx+r, cy+r), outline=fill, width=width)
+    nodes=[]
+    for ring, count in [(150, 18),(260, 28),(385, 42),(535, 54),(720, 68)]:
+        for i in range(count):
+            a=2*math.pi*i/count + rng.uniform(-.08,.08)
+            rr=ring+rng.uniform(-34,34)
+            x,y=polar(cx,cy,rr,a)
+            nodes.append((x,y,a,ring))
+            rad=2 if ring>400 else 3
+            d.ellipse((x-rad,y-rad,x+rad,y+rad), fill=int(82+130*(1-ring/760)))
+    for i,(x,y,a,ring) in enumerate(nodes):
+        candidates=nodes[max(0,i-7):min(len(nodes),i+8)]
+        for x2,y2,a2,ring2 in candidates:
+            if abs(ring2-ring)>180 or (x==x2 and y==y2): continue
+            dist=math.hypot(x2-x,y2-y)
+            if dist<145 and rng.random()<.23:
+                d.line((x,y,x2,y2), fill=int(max(14,92-dist*.42)), width=1)
+    # Long axons and lower body-like wake.
+    for i in range(58):
+        a=rng.uniform(math.pi*.10,math.pi*.90)
+        start=polar(cx,cy,rng.uniform(120,380),a)
+        end=(int(cx+rng.uniform(-470,470)), int(rng.uniform(1220,2220)))
+        ctrl=(int((start[0]+end[0])/2+rng.uniform(-130,130)), int((start[1]+end[1])/2))
+        d.line(bezier(start,ctrl,end,60), fill=rng.randint(18,74), width=rng.choice([1,1,2]))
+    s.ellipse((cx-82,cy-82,cx+82,cy+82),fill=120)
+    d.ellipse((cx-44,cy-44,cx+44,cy+44),outline=235,width=7)
+    d.ellipse((cx-13,cy-13,cx+13,cy+13),fill=255)
+    return add_grain(edge_fade(composite(base,soft,detail,16)),8841,8)
+
+
+def cipher_cathedral() -> Image.Image:
+    base, soft, detail, s, d = layered_canvas()
+    cx=W//2
+    horizon=870
+    # Perspective vaults and server columns.
+    for depth in range(12):
+        t=depth/11
+        half=int(480*(1-t)+95*t)
+        top=int(260*(1-t)+horizon*t)
+        floor=int(2260*(1-t)+horizon*t)
+        fill=int(22+115*(1-t))
+        d.line((cx-half,top,cx-half//3,horizon),fill=fill,width=max(1,5-depth//3))
+        d.line((cx+half,top,cx+half//3,horizon),fill=fill,width=max(1,5-depth//3))
+        d.line((cx-half,floor,cx-half//3,horizon),fill=max(12,fill-20),width=max(1,4-depth//4))
+        d.line((cx+half,floor,cx+half//3,horizon),fill=max(12,fill-20),width=max(1,4-depth//4))
+    for x in range(75,W,65):
+        perspective=abs(x-cx)/(W/2)
+        top=int(330+300*(1-perspective))
+        d.line((x,top,x,2160),fill=int(22+72*(1-perspective)),width=2)
+        for y in range(top+25,2150,38):
+            if (x//65+y//38)%3==0:
+                d.line((x-13,y,x+13,y),fill=int(28+95*(1-perspective)),width=2)
+    # Central encrypted reliquary.
+    d.rounded_rectangle((cx-122,540,cx+122,1725),28,outline=205,width=8)
+    d.rounded_rectangle((cx-92,605,cx+92,1650),20,outline=72,width=3)
+    for y in range(660,1580,62):
+        d.line((cx-70,y,cx+70,y),fill=65+(y//62)%3*24,width=3)
+    for r,fill in [(56,236),(95,115),(160,42),(255,18)]:
+        d.ellipse((cx-r,860-r,cx+r,860+r),outline=fill,width=max(2,7-r//60))
+    d.ellipse((cx-16,844,cx+16,876),fill=255)
+    return add_grain(edge_fade(composite(base,soft,detail,18)),2048,8)
+
+
+def quantum_lattice() -> Image.Image:
+    base, soft, detail, s, d = layered_canvas()
+    cx,cy=W//2,930
+    rng=random.Random(7193)
+    # Perspective lattice.
+    for i in range(-13,14):
+        x0=cx+i*53
+        d.line((cx,cy,x0,2220),fill=22+int(56*(1-abs(i)/14)),width=2)
+    for j in range(18):
+        t=j/17
+        y=int(cy+(2220-cy)*t*t)
+        half=int(40+(W*.47-40)*t)
+        d.line((cx-half,y,cx+half,y),fill=int(86*(1-t)+18),width=2)
+    # Probability shells and entangled nodes.
+    for k in range(7):
+        rx=100+k*75
+        ry=56+k*47
+        offset=math.sin(k*1.7)*70
+        d.ellipse((cx-rx,cy+offset-ry,cx+rx,cy+offset+ry),outline=45+k*18,width=3)
+    pts=[]
+    for i in range(72):
+        a=2*math.pi*i/72
+        r=165+115*math.sin(3*a)+rng.uniform(-20,20)
+        x=int(cx+math.cos(a)*r)
+        y=int(cy+math.sin(a)*r*.68)
+        pts.append((x,y))
+        d.ellipse((x-3,y-3,x+3,y+3),fill=rng.randint(100,230))
+    for i in range(0,len(pts),3):
+        x,y=pts[i]
+        x2,y2=pts[(i+17)%len(pts)]
+        d.line((x,y,x2,y2),fill=42,width=1)
+    d.ellipse((cx-28,cy-28,cx+28,cy+28),fill=244)
+    d.ellipse((cx-96,cy-96,cx+96,cy+96),outline=198,width=7)
+    return add_grain(edge_fade(composite(base,soft,detail,16)),7193,8)
+
+
+def fusion_core() -> Image.Image:
+    base, soft, detail, s, d = layered_canvas()
+    cx,cy=W//2,930
+    rng=random.Random(42420)
+    # Tokamak / reactor rings.
+    for r,fill,width in [(115,248,8),(180,160,6),(270,92,4),(390,48,3),(540,24,2),(730,12,2)]:
+        d.ellipse((cx-r,cy-r,cx+r,cy+r),outline=fill,width=width)
+    for a in np.linspace(0,2*math.pi,24,endpoint=False):
+        p1=polar(cx,cy,135,a)
+        p2=polar(cx,cy,475,a+0.16*math.sin(a*3))
+        d.line((p1,p2),fill=82,width=3)
+    # Plasma filaments.
+    for i in range(64):
+        a=rng.uniform(0,2*math.pi)
+        start=polar(cx,cy,rng.uniform(70,150),a)
+        mid=polar(cx,cy,rng.uniform(210,380),a+rng.uniform(-.6,.6))
+        end=polar(cx,cy,rng.uniform(450,700),a+rng.uniform(-.35,.35))
+        d.line(bezier(start,mid,end,50),fill=rng.randint(32,125),width=rng.choice([1,2,3]))
+    # Lower containment tower.
+    d.rounded_rectangle((cx-155,1110,cx+155,2020),70,outline=116,width=6)
+    for y in range(1200,1960,55):
+        half=int(115-40*math.sin((y-1200)/760*math.pi))
+        d.line((cx-half,y,cx+half,y),fill=35+(y//55)%4*18,width=2)
+    s.ellipse((cx-68,cy-68,cx+68,cy+68),fill=180)
+    d.ellipse((cx-24,cy-24,cx+24,cy+24),fill=255)
+    return add_grain(edge_fade(composite(base,soft,detail,18)),42420,8)
+
+
+def packet_bloom() -> Image.Image:
+    base, soft, detail, s, d = layered_canvas()
+    cx,cy=W//2,990
+    rng=random.Random(1031)
+    # Radial packet petals made of circuit paths.
+    for petal in range(12):
+        angle=2*math.pi*petal/12
+        for lane in range(7):
+            start=polar(cx,cy,70+lane*10,angle+lane*.018)
+            mid=polar(cx,cy,260+lane*38,angle+math.sin(lane)*.10)
+            end=polar(cx,cy,520+lane*36,angle+math.sin(petal)*.08)
+            points=[start,(mid[0],start[1]),mid,(mid[0],end[1]),end] if petal%2==0 else [start,(start[0],mid[1]),mid,(end[0],mid[1]),end]
+            d.line(points,fill=30+lane*17,width=1+lane//3,joint='curve')
+            for x,y in (points[1],points[2],points[3]):
+                d.rectangle((x-2,y-2,x+2,y+2),fill=100+lane*16)
+    for r,fill in [(88,238),(170,126),(310,58),(500,24),(720,12)]:
+        d.ellipse((cx-r,cy-r,cx+r,cy+r),outline=fill,width=max(2,7-r//110))
+    # Falling packet trails.
+    for i in range(80):
+        x=rng.randint(70,W-70)
+        y=rng.randint(1260,2200)
+        length=rng.randint(35,240)
+        d.line((x,y,x,y+length),fill=rng.randint(18,88),width=rng.choice([1,1,2]))
+        if rng.random()<.45:
+            d.line((x,y+length,x+rng.choice([-1,1])*rng.randint(15,70),y+length),fill=rng.randint(24,100),width=1)
+    d.ellipse((cx-22,cy-22,cx+22,cy+22),fill=255)
+    return add_grain(edge_fade(composite(base,soft,detail,15)),1031,8)
+
+
 def save(name: str, img: Image.Image):
-    OUT.mkdir(parents=True, exist_ok=True)
-    img.save(OUT / f"scene_{name}.png", optimize=True)
+    OUT_WEB.mkdir(parents=True, exist_ok=True)
+    OUT_ANDROID.mkdir(parents=True, exist_ok=True)
+    img.save(OUT_WEB/f"scene_{name}.png", optimize=True)
+    img.save(OUT_ANDROID/f"scene_{name}.png", optimize=True)
 
 
 def thumbnail():
-    src = Image.open(OUT / "scene_sentinel.png").resize((220,488), Image.Resampling.LANCZOS)
+    src = Image.open(OUT_WEB/"scene_sentinel.png").resize((220,488), Image.Resampling.LANCZOS)
     out = Image.new("RGB", (512,512), "black")
     arr = np.asarray(src)
     draw = ImageDraw.Draw(out)
@@ -203,13 +385,20 @@ def thumbnail():
             if v<16: continue
             ch=ramp[min(len(ramp)-1,int(v/256*len(ramp)))]
             draw.text((146+x,12+y),ch,fill=(v,v,min(255,v+12)))
-    out.save(OUT / "wallpaper_thumbnail.png", optimize=True)
+    p=ROOT/"apps/android/app/src/main/res/drawable/wallpaper_thumbnail.png"
+    out.save(p,optimize=True)
+    out.save(OUT_WEB/"wallpaper_thumbnail.png", optimize=True)
 
 
 def main():
     save("sentinel", sentinel())
     save("moth", moth())
     save("orbit", orbit())
+    save("neural_halo", neural_halo())
+    save("cipher_cathedral", cipher_cathedral())
+    save("quantum_lattice", quantum_lattice())
+    save("fusion_core", fusion_core())
+    save("packet_bloom", packet_bloom())
     thumbnail()
     print("generated")
 

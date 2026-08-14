@@ -39,8 +39,10 @@ final class GlyphSceneRenderer {
         final Bitmap baseBitmap;
         final Bitmap eventBitmap;
         final Bitmap resultBitmap;
+        final List<AmbientGlyph> ambientGlyphs;
         final List<Particle> particles;
         final int accent;
+        final DemoCatalog.Theme theme;
 
         Scene(
                 int width,
@@ -48,16 +50,20 @@ final class GlyphSceneRenderer {
                 Bitmap baseBitmap,
                 Bitmap eventBitmap,
                 Bitmap resultBitmap,
+                List<AmbientGlyph> ambientGlyphs,
                 List<Particle> particles,
-                int accent
+                int accent,
+                DemoCatalog.Theme theme
         ) {
             this.width = width;
             this.height = height;
             this.baseBitmap = baseBitmap;
             this.eventBitmap = eventBitmap;
             this.resultBitmap = resultBitmap;
+            this.ambientGlyphs = ambientGlyphs;
             this.particles = particles;
             this.accent = accent;
+            this.theme = theme;
         }
 
         void recycle() {
@@ -83,6 +89,26 @@ final class GlyphSceneRenderer {
         }
     }
 
+    private static final class AmbientGlyph {
+        final float x;
+        final float y;
+        final char glyph;
+        final float size;
+        final float alpha;
+        final float phase;
+        final float depth;
+
+        AmbientGlyph(float x, float y, char glyph, float size, float alpha, float phase, float depth) {
+            this.x = x;
+            this.y = y;
+            this.glyph = glyph;
+            this.size = size;
+            this.alpha = alpha;
+            this.phase = phase;
+            this.depth = depth;
+        }
+    }
+
     private static final class Particle {
         final float sourceX;
         final float sourceY;
@@ -93,6 +119,8 @@ final class GlyphSceneRenderer {
         final float arc;
         final float size;
         final float alpha;
+        final float delay;
+        final float duration;
 
         Particle(
                 float sourceX,
@@ -103,7 +131,9 @@ final class GlyphSceneRenderer {
                 float phase,
                 float arc,
                 float size,
-                float alpha
+                float alpha,
+                float delay,
+                float duration
         ) {
             this.sourceX = sourceX;
             this.sourceY = sourceY;
@@ -114,6 +144,8 @@ final class GlyphSceneRenderer {
             this.arc = arc;
             this.size = size;
             this.alpha = alpha;
+            this.delay = delay;
+            this.duration = duration;
         }
     }
 
@@ -124,8 +156,9 @@ final class GlyphSceneRenderer {
             DemoCatalog.Theme theme,
             DemoCatalog.Event event
     ) {
+        RenderQuality quality = RenderQuality.LUX;
         int safeWidth = Math.max(360, surfaceWidth);
-        int renderWidth = Math.min(720, safeWidth);
+        int renderWidth = Math.min(quality.maxRenderWidth, safeWidth);
         int renderHeight = Math.max(800, Math.round(renderWidth * (surfaceHeight / (float) Math.max(1, surfaceWidth))));
 
         BitmapFactory.Options options = new BitmapFactory.Options();
@@ -135,13 +168,14 @@ final class GlyphSceneRenderer {
         Bitmap mask = Bitmap.createScaledBitmap(decoded, renderWidth, renderHeight, true);
         if (mask != decoded) decoded.recycle();
 
-        List<GlyphPoint> basePoints = extractGlyphPoints(mask, renderWidth, renderHeight, theme);
+        List<GlyphPoint> basePoints = extractGlyphPoints(mask, renderWidth, renderHeight, theme, quality);
         mask.recycle();
 
         Bitmap base = renderBaseBitmap(renderWidth, renderHeight, basePoints, theme);
         TextGeometry eventGeometry = renderEventBitmap(base, renderWidth, renderHeight, theme, event, false);
         TextGeometry resultGeometry = renderEventBitmap(base, renderWidth, renderHeight, theme, event, true);
-        List<Particle> particles = buildParticles(basePoints, eventGeometry.targets, event, theme);
+        List<AmbientGlyph> ambientGlyphs = buildAmbientGlyphs(basePoints, theme, quality);
+        List<Particle> particles = buildParticles(basePoints, eventGeometry.targets, event, theme, renderWidth, renderHeight, quality);
 
         return new Scene(
                 renderWidth,
@@ -149,8 +183,10 @@ final class GlyphSceneRenderer {
                 base,
                 eventGeometry.bitmap,
                 resultGeometry.bitmap,
+                ambientGlyphs,
                 particles,
-                event.accent
+                event.accent,
+                theme
         );
     }
 
@@ -172,6 +208,11 @@ final class GlyphSceneRenderer {
 
         bitmapPaint.setAlpha(Math.round(255f * (1f - reveal * 0.78f)));
         output.drawBitmap(scene.baseBitmap, null, destination, bitmapPaint);
+
+        output.save();
+        output.scale(targetWidth / (float) scene.width, targetHeight / (float) scene.height);
+        drawAmbientMotion(output, scene, frame, nowMs);
+        output.restore();
 
         bitmapPaint.setAlpha(Math.round(255f * reveal * (1f - result)));
         output.drawBitmap(scene.eventBitmap, null, destination, bitmapPaint);
@@ -195,12 +236,13 @@ final class GlyphSceneRenderer {
             Bitmap mask,
             int width,
             int height,
-            DemoCatalog.Theme theme
+            DemoCatalog.Theme theme,
+            RenderQuality quality
     ) {
         int[] pixels = new int[width * height];
         mask.getPixels(pixels, 0, width, 0, 0, width, height);
         List<GlyphPoint> points = new ArrayList<>();
-        int step = Math.max(7, Math.round(width / 90f));
+        int step = quality.glyphStepFor(width);
         int top = Math.round(height * 0.05f);
         int bottom = Math.round(height * 0.97f);
         int side = Math.round(width * 0.028f);
@@ -212,15 +254,16 @@ final class GlyphSceneRenderer {
                 float noise = GlyphMath.hash(x, y, theme.ordinal() + 1f);
                 float threshold = 0.037f + noise * 0.105f;
                 if (value < threshold && noise < 0.91f) continue;
-                float level = GlyphMath.clamp01(value * 1.10f + (noise - 0.5f) * 0.11f);
+                float level = GlyphMath.clamp01(value * 1.10f * theme.exposure + (noise - 0.5f) * 0.10f);
                 int rampIndex = Math.min(RAMP.length() - 1, (int) Math.floor(level * RAMP.length()));
                 char glyph = RAMP.charAt(rampIndex);
-                if (level < 0.16f) {
-                    glyph = BASE_GLYPHS.charAt(Math.min(BASE_GLYPHS.length() - 1, (int) (noise * BASE_GLYPHS.length())));
+                if (level < 0.20f || noise > 0.88f) {
+                    String vocabulary = theme.textureGlyphs + BASE_GLYPHS;
+                    glyph = vocabulary.charAt(Math.min(vocabulary.length() - 1, (int) (noise * vocabulary.length())));
                 }
                 points.add(new GlyphPoint(
-                        x + (noise - 0.5f) * 1.8f,
-                        y + (GlyphMath.hash(y, x, 3f) - 0.5f) * 1.6f,
+                        x + (noise - 0.5f) * 1.25f,
+                        y + (GlyphMath.hash(y, x, 3f) - 0.5f) * 1.15f,
                         glyph,
                         GlyphMath.clamp01(0.08f + level * 0.94f),
                         width * (0.0083f + level * 0.0039f)
@@ -244,16 +287,19 @@ final class GlyphSceneRenderer {
         paint.setTypeface(MONO);
         paint.setTextAlign(Paint.Align.CENTER);
 
-        int cool = theme == DemoCatalog.Theme.ORBIT ? 9 : theme == DemoCatalog.Theme.MOTH ? 4 : 12;
+        int tintRed = Color.red(theme.atmosphereColor);
+        int tintGreen = Color.green(theme.atmosphereColor);
+        int tintBlue = Color.blue(theme.atmosphereColor);
         char[] one = new char[1];
         for (GlyphPoint point : points) {
-            int value = Math.round(100 + 155 * point.alpha);
+            int value = Math.round(72 + 182 * point.alpha);
+            float tintMix = 0.12f + point.alpha * 0.13f;
             paint.setColor(Color.rgb(
-                    Math.max(0, value - cool),
-                    value,
-                    Math.min(255, value + cool)
+                    Math.round(GlyphMath.mix(value, tintRed, tintMix)),
+                    Math.round(GlyphMath.mix(value, tintGreen, tintMix)),
+                    Math.round(GlyphMath.mix(value, tintBlue, tintMix))
             ));
-            paint.setAlpha(Math.round(point.alpha * 255f));
+            paint.setAlpha(Math.round(point.alpha * 235f));
             paint.setTextSize(point.size);
             one[0] = point.glyph;
             canvas.drawText(one, 0, 1, point.x, point.y, paint);
@@ -261,15 +307,42 @@ final class GlyphSceneRenderer {
 
         Paint atmosphere = new Paint(Paint.ANTI_ALIAS_FLAG);
         atmosphere.setShader(new RadialGradient(
-                width / 2f,
-                height * 0.27f,
-                width * 0.73f,
-                new int[] { Color.argb(14, 198, 225, 237), Color.TRANSPARENT },
-                new float[] { 0f, 1f },
+                width * theme.atmosphereX,
+                height * theme.atmosphereY,
+                width * 0.76f,
+                new int[] { withAlpha(theme.atmosphereColor, 16), withAlpha(theme.atmosphereColor, 5), Color.TRANSPARENT },
+                new float[] { 0f, 0.48f, 1f },
                 Shader.TileMode.CLAMP
         ));
-        canvas.drawCircle(width / 2f, height * 0.27f, width * 0.73f, atmosphere);
+        canvas.drawCircle(width * theme.atmosphereX, height * theme.atmosphereY, width * 0.76f, atmosphere);
         return bitmap;
+    }
+
+    private static List<AmbientGlyph> buildAmbientGlyphs(
+            List<GlyphPoint> points,
+            DemoCatalog.Theme theme,
+            RenderQuality quality
+    ) {
+        List<GlyphPoint> candidates = new ArrayList<>();
+        for (GlyphPoint point : points) {
+            if (point.alpha > 0.18f) candidates.add(point);
+        }
+        int desired = Math.round(980f * quality.liveDensity);
+        int count = Math.min(desired, candidates.size());
+        List<AmbientGlyph> live = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            GlyphPoint point = candidates.get((i * 97 + theme.ordinal() * 53) % candidates.size());
+            live.add(new AmbientGlyph(
+                    point.x,
+                    point.y,
+                    point.glyph,
+                    point.size,
+                    point.alpha,
+                    GlyphMath.hash(i, point.x, point.y) * (float) Math.PI * 2f,
+                    0.25f + 0.75f * GlyphMath.hash(point.y, i, 11f)
+            ));
+        }
+        return live;
     }
 
     private static final class TextGeometry {
@@ -438,23 +511,28 @@ final class GlyphSceneRenderer {
             List<GlyphPoint> sources,
             List<GlyphPoint> targets,
             DemoCatalog.Event event,
-            DemoCatalog.Theme theme
+            DemoCatalog.Theme theme,
+            int width,
+            int height,
+            RenderQuality quality
     ) {
         List<GlyphPoint> eligibleSources = new ArrayList<>();
         for (GlyphPoint source : sources) {
             if (source.alpha > 0.24f) eligibleSources.add(source);
         }
-        int count = Math.min(1400, Math.max(650, targets.size()));
+        int count = quality.particleCountFor(targets.size());
         List<Particle> particles = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             GlyphPoint target = targets.isEmpty()
-                    ? new GlyphPoint(360, 1000, '@', 1f, 9f)
+                    ? new GlyphPoint(width / 2f, height / 2f, '@', 1f, width * 0.01f)
                     : targets.get((i * 37) % targets.size());
             GlyphPoint source = eligibleSources.isEmpty()
                     ? target
                     : eligibleSources.get((i * 83 + event.id.length() * 101) % eligibleSources.size());
             float noise = GlyphMath.hash(i, event.id.length(), theme.ordinal() + 1f);
             char glyph = event.glyphs.charAt(Math.min(event.glyphs.length() - 1, (int) (noise * event.glyphs.length())));
+            float sourceBand = GlyphMath.clamp01(source.y / Math.max(1f, height));
+            float targetBand = GlyphMath.clamp01(target.y / Math.max(1f, height));
             particles.add(new Particle(
                     source.x,
                     source.y,
@@ -462,9 +540,11 @@ final class GlyphSceneRenderer {
                     target.y,
                     glyph,
                     noise * (float) Math.PI * 2f,
-                    19f + noise * 60f,
-                    5.5f + noise * 4.5f,
-                    0.22f + 0.72f * GlyphMath.hash(i, event.id.length(), 2f)
+                    width * (0.026f + noise * 0.090f) * theme.motionStrength,
+                    width * (0.0063f + noise * 0.0048f),
+                    0.22f + 0.72f * GlyphMath.hash(i, event.id.length(), 2f),
+                    0.015f + 0.27f * sourceBand + 0.08f * GlyphMath.hash(i, source.x, 7f),
+                    0.56f + 0.13f * (1f - targetBand) + 0.05f * noise
             ));
         }
         return particles;
@@ -472,7 +552,6 @@ final class GlyphSceneRenderer {
 
     private static void drawParticles(Canvas canvas, Scene scene, float reveal, long nowMs) {
         if (reveal <= 0f || reveal >= 1f) return;
-        float move = GlyphMath.easeOutCubic(reveal);
         float visibility = (float) Math.sin(Math.PI * reveal);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
         paint.setTypeface(MONO);
@@ -481,16 +560,76 @@ final class GlyphSceneRenderer {
         int red = Color.red(scene.accent);
         int green = Color.green(scene.accent);
         int blue = Color.blue(scene.accent);
+        float focusX = scene.width * scene.theme.atmosphereX;
+        float focusY = scene.height * scene.theme.atmosphereY;
 
         for (Particle particle : scene.particles) {
-            float wave = (float) Math.sin(Math.PI * reveal);
-            float x = GlyphMath.mix(particle.sourceX, particle.targetX, move)
-                    + (float) Math.sin(particle.phase + reveal * 5.2f) * particle.arc * wave;
-            float y = GlyphMath.mix(particle.sourceY, particle.targetY, move)
-                    + (float) Math.cos(particle.phase * 1.3f + reveal * 4.1f) * particle.arc * 0.48f * wave;
+            float local = GlyphMath.staggeredProgress(reveal, particle.delay, particle.duration);
+            if (local <= 0f || local >= 1f) continue;
+            float move = GlyphMath.easeOutCubic(local);
+            float wave = (float) Math.sin(Math.PI * local);
+            float x;
+            float y;
+
+            switch (scene.theme.motionStyle) {
+                case CIRCUIT: {
+                    boolean horizontalFirst = Math.sin(particle.phase) >= 0f;
+                    if (horizontalFirst) {
+                        x = GlyphMath.mix(particle.sourceX, particle.targetX, GlyphMath.smooth(Math.min(1f, move * 1.85f)));
+                        y = GlyphMath.mix(particle.sourceY, particle.targetY, GlyphMath.smooth(Math.max(0f, (move - 0.46f) / 0.54f)));
+                    } else {
+                        y = GlyphMath.mix(particle.sourceY, particle.targetY, GlyphMath.smooth(Math.min(1f, move * 1.85f)));
+                        x = GlyphMath.mix(particle.sourceX, particle.targetX, GlyphMath.smooth(Math.max(0f, (move - 0.46f) / 0.54f)));
+                    }
+                    x += (float) Math.sin(particle.phase * 1.7f) * particle.arc * 0.055f * wave;
+                    y += (float) Math.cos(particle.phase * 1.3f) * particle.arc * 0.055f * wave;
+                    break;
+                }
+                case ORBITAL: {
+                    float midX = (particle.sourceX + particle.targetX) * 0.5f;
+                    float midY = (particle.sourceY + particle.targetY) * 0.5f;
+                    float vx = midX - focusX;
+                    float vy = midY - focusY;
+                    float length = Math.max(1f, (float) Math.hypot(vx, vy));
+                    float direction = Math.sin(particle.phase) >= 0f ? 1f : -1f;
+                    float controlX = midX - vy / length * particle.arc * 1.35f * direction;
+                    float controlY = midY + vx / length * particle.arc * 1.35f * direction;
+                    float u = 1f - move;
+                    x = u * u * particle.sourceX + 2f * u * move * controlX + move * move * particle.targetX;
+                    y = u * u * particle.sourceY + 2f * u * move * controlY + move * move * particle.targetY;
+                    break;
+                }
+                case RADIAL: {
+                    float tangent = particle.phase + move * 2.4f;
+                    float controlX = GlyphMath.mix(particle.sourceX, focusX, 0.58f) + (float) Math.cos(tangent) * particle.arc;
+                    float controlY = GlyphMath.mix(particle.sourceY, focusY, 0.58f) + (float) Math.sin(tangent) * particle.arc * 0.66f;
+                    float u = 1f - move;
+                    x = u * u * particle.sourceX + 2f * u * move * controlX + move * move * particle.targetX;
+                    y = u * u * particle.sourceY + 2f * u * move * controlY + move * move * particle.targetY;
+                    break;
+                }
+                case BLOOM: {
+                    float sourceAngle = (float) Math.atan2(particle.sourceY - focusY, particle.sourceX - focusX);
+                    float petal = (float) Math.sin(sourceAngle * 6f + particle.phase) * particle.arc;
+                    float controlX = focusX + (float) Math.cos(sourceAngle) * (scene.width * 0.22f + petal);
+                    float controlY = focusY + (float) Math.sin(sourceAngle) * (scene.width * 0.18f + petal * 0.55f);
+                    float u = 1f - move;
+                    x = u * u * particle.sourceX + 2f * u * move * controlX + move * move * particle.targetX;
+                    y = u * u * particle.sourceY + 2f * u * move * controlY + move * move * particle.targetY;
+                    break;
+                }
+                case FLOW:
+                default:
+                    x = GlyphMath.mix(particle.sourceX, particle.targetX, move)
+                            + (float) Math.sin(particle.phase + local * 5.2f) * particle.arc * wave;
+                    y = GlyphMath.mix(particle.sourceY, particle.targetY, move)
+                            + (float) Math.cos(particle.phase * 1.3f + local * 4.1f) * particle.arc * 0.48f * wave;
+                    break;
+            }
+
             paint.setTextSize(particle.size);
             paint.setColor(Color.rgb(red, green, blue));
-            paint.setAlpha(Math.round(255f * visibility * particle.alpha));
+            paint.setAlpha(Math.round(255f * visibility * wave * particle.alpha));
             one[0] = particle.glyph;
             canvas.drawText(one, 0, 1, x, y, paint);
         }
@@ -502,11 +641,101 @@ final class GlyphSceneRenderer {
                 waveY - scene.height * 0.042f,
                 0f,
                 waveY + scene.height * 0.042f,
-                new int[] { Color.TRANSPARENT, withAlpha(scene.accent, Math.round(9f * visibility)), Color.TRANSPARENT },
+                new int[] { Color.TRANSPARENT, withAlpha(scene.accent, Math.round(10f * visibility)), Color.TRANSPARENT },
                 new float[] { 0f, 0.5f, 1f },
                 Shader.TileMode.CLAMP
         ));
         canvas.drawRect(0f, waveY - scene.height * 0.042f, scene.width, waveY + scene.height * 0.042f, glow);
+    }
+
+    private static void drawAmbientMotion(Canvas canvas, Scene scene, ExperienceController.Frame frame, long nowMs) {
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+        paint.setTypeface(MONO);
+        paint.setTextAlign(Paint.Align.CENTER);
+        char[] one = new char[1];
+        float seconds = nowMs / 1000f;
+        float focusX = scene.width * scene.theme.atmosphereX;
+        float focusY = scene.height * scene.theme.atmosphereY;
+        int red = Color.red(scene.theme.atmosphereColor);
+        int green = Color.green(scene.theme.atmosphereColor);
+        int blue = Color.blue(scene.theme.atmosphereColor);
+        float wakeRadius = GlyphMath.mix(scene.width * 0.02f, scene.width * 0.92f, GlyphMath.easeOutCubic(frame.wakeProgress));
+        float wakeStrength = 1f - frame.wakeProgress;
+        float fade = 1f - frame.revealProgress * 0.72f;
+
+        for (AmbientGlyph glyph : scene.ambientGlyphs) {
+            float strength = scene.theme.motionStrength * glyph.depth;
+            float vx = glyph.x - focusX;
+            float vy = glyph.y - focusY;
+            float radius = Math.max(1f, (float) Math.hypot(vx, vy));
+            float x = glyph.x;
+            float y = glyph.y;
+
+            switch (scene.theme.motionStyle) {
+                case ORBITAL: {
+                    float angle = (float) Math.sin(seconds * 0.30f + glyph.phase) * 0.012f * strength
+                            + seconds * 0.0018f * (glyph.phase > Math.PI ? -1f : 1f);
+                    float ca = (float) Math.cos(angle);
+                    float sa = (float) Math.sin(angle);
+                    x = focusX + vx * ca - vy * sa;
+                    y = focusY + vx * sa + vy * ca;
+                    x += (float) Math.sin(seconds * 0.72f + glyph.phase) * 2.4f * strength;
+                    break;
+                }
+                case CIRCUIT: {
+                    float lane = ((seconds * 22f * (0.35f + glyph.depth) + glyph.phase * 40f) % 92f) - 46f;
+                    y += lane * 0.18f * strength;
+                    if (Math.sin(seconds * 1.4f + glyph.phase) > 0.74f) x += 7f * strength;
+                    break;
+                }
+                case RADIAL: {
+                    float scale = 1f + (float) Math.sin(seconds * 0.82f + glyph.phase) * 0.0068f * strength;
+                    x = focusX + vx * scale;
+                    y = focusY + vy * scale;
+                    float tangent = (float) Math.sin(seconds * 0.5f + glyph.phase) * 4.2f * strength;
+                    x += -vy / radius * tangent;
+                    y += vx / radius * tangent;
+                    break;
+                }
+                case BLOOM: {
+                    float angle = (float) Math.atan2(vy, vx);
+                    float petal = (float) Math.sin(angle * 6f + seconds * 0.66f + glyph.phase) * 6.5f * strength;
+                    float scale = 1f + petal / Math.max(scene.width * 0.18f, radius) * 0.42f;
+                    x = focusX + vx * scale;
+                    y = focusY + vy * scale;
+                    break;
+                }
+                case FLOW:
+                default:
+                    x += (float) Math.sin(seconds * 0.55f + glyph.y * 0.006f + glyph.phase) * 5.5f * strength;
+                    y += (float) Math.cos(seconds * 0.38f + glyph.x * 0.005f + glyph.phase) * 3.2f * strength;
+                    break;
+            }
+
+            float wakeDistance = (radius - wakeRadius) / Math.max(1f, scene.width * 0.08f);
+            float wakeBand = (float) Math.exp(-wakeDistance * wakeDistance) * wakeStrength;
+            float twinkle = 0.58f + 0.42f * (float) Math.sin(seconds * (1.1f + glyph.depth) + glyph.phase);
+            float alpha = fade * (0.045f + glyph.alpha * 0.24f) * (0.72f + twinkle * 0.28f) + wakeBand * 0.46f;
+            if (alpha <= 0.015f) continue;
+            paint.setTextSize(glyph.size * (1f + wakeBand * 0.12f));
+            paint.setColor(Color.rgb(red, green, blue));
+            paint.setAlpha(Math.min(255, Math.round(alpha * 255f)));
+            one[0] = glyph.glyph;
+            canvas.drawText(one, 0, 1, x, y, paint);
+        }
+
+        if (wakeStrength > 0.001f) {
+            Paint halo = new Paint(Paint.ANTI_ALIAS_FLAG);
+            halo.setShader(new RadialGradient(
+                    focusX,
+                    focusY,
+                    Math.max(scene.width * 0.01f, wakeRadius + scene.width * 0.10f),
+                    new int[] { Color.TRANSPARENT, withAlpha(scene.theme.atmosphereColor, Math.round(15f * wakeStrength)), Color.TRANSPARENT },
+                    new float[] { 0.65f, 0.84f, 1f },
+                    Shader.TileMode.CLAMP
+            ));
+            canvas.drawCircle(focusX, focusY, wakeRadius + scene.width * 0.10f, halo);
+        }
     }
 
     private static void drawListening(Canvas canvas, Scene scene, long nowMs) {

@@ -57,7 +57,7 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
 
         ExperienceController.Frame frame = experience.frame(now);
         GlyphSceneRenderer.draw(canvas, localScene, frame, now, true);
-        if (frame.needsAnimation) postInvalidateOnAnimation();
+        if (frame.needsAnimation) postInvalidateDelayed(frame.frameDelayMs);
     }
 
     @Override
@@ -68,6 +68,8 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        experience.wake(SystemClock.uptimeMillis());
+        invalidate();
     }
 
     @Override

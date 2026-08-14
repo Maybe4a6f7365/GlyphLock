@@ -26,12 +26,10 @@ def make_html(theme: str, event: str, t: float) -> str:
     main = main.replace("import { layoutWithLines, prepareWithSegments } from './text-layout.js';\n", '')
     main = main.replace("import './style.css';\n", '')
 
-    assets = {
-        name: data_uri(DIST / 'assets' / f'scene_{name}.png')
-        for name in ('sentinel', 'moth', 'orbit')
-    }
-    asset_literal = '{' + ','.join(f'{k}:`{v}`' for k, v in assets.items()) + '}'
-    main = main.replace('const EVENTS = [', f'const INLINE_ASSETS = {asset_literal};\nconst EVENTS = [', 1)
+    names = ('sentinel', 'moth', 'orbit', 'neural_halo', 'cipher_cathedral', 'quantum_lattice', 'fusion_core', 'packet_bloom')
+    selected_asset = data_uri(DIST / 'assets' / f'scene_{theme}.png')
+    asset_literal = '{' + ','.join(f'{name}:SELECTED_ASSET' for name in names) + '}'
+    main = main.replace('const EVENTS = [', f'const SELECTED_ASSET = `{selected_asset}`;\nconst INLINE_ASSETS = {asset_literal};\nconst EVENTS = [', 1)
     main = main.replace('image.src = `/assets/scene_${id}.png`;', 'image.src = INLINE_ASSETS[id];')
     main = main.replace('const query = new URLSearchParams(location.search);', f"const query = new URLSearchParams('?capture=1&theme={theme}&event={event}&t={t}');")
 

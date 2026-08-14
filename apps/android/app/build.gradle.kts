@@ -2,28 +2,19 @@ plugins {
     id("com.android.application")
 }
 
-val generatedGlyphResources = layout.buildDirectory.dir("generated/glyphlock/res")
-val syncGlyphAssets by tasks.registering(Copy::class) {
-    from(rootProject.file("../../assets/scenes"))
-    into(generatedGlyphResources.map { it.dir("drawable-nodpi") })
-    include("*.png")
-}
-
 android {
     namespace = "dev.glyphlock.wallpaper"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.glyphlock.wallpaper"
         minSdk = 28
-        targetSdk = 37
-        versionCode = 2
-        versionName = "0.2.0-prototype"
+        targetSdk = 36
+        versionCode = 3
+        versionName = "0.3.0-motion-art-pack"
 
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
     }
-
-    sourceSets.getByName("main").res.srcDir(generatedGlyphResources)
 
     buildTypes {
         release {
@@ -44,10 +35,6 @@ android {
         abortOnError = true
         warningsAsErrors = false
     }
-}
-
-tasks.named("preBuild").configure {
-    dependsOn(syncGlyphAssets)
 }
 
 dependencies {

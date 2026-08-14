@@ -66,7 +66,7 @@ public final class MainActivity extends Activity {
         root.addView(title, titleParams);
 
         TextView subtitle = text(
-                "Prototype 0 proves one thing only: can high-density glyph artwork transform into useful lock-screen information without becoming a notification card?",
+                "Eight procedural glyph systems now move continuously, wake with a ripple, and transform into useful lock-screen information without becoming notification cards.",
                 15,
                 Color.argb(168, 226, 234, 238)
         );
@@ -95,7 +95,7 @@ public final class MainActivity extends Activity {
         );
         heroFrame.addView(heroCaption, captionParams);
 
-        TextView localBadge = text("LOCAL FIXTURES · NO HERMES · NO NETWORK", 10, Color.rgb(159, 221, 238));
+        TextView localBadge = text("8 ART SYSTEMS · 5 MOTION GRAMMARS · LOCAL ONLY", 10, Color.rgb(159, 221, 238));
         localBadge.setLetterSpacing(0.10f);
         heroCaption.addView(localBadge);
         selectionLabel = text("", 19, Color.WHITE);
@@ -150,7 +150,7 @@ public final class MainActivity extends Activity {
         TextView controlsTitle = sectionLabel("INTERACTION");
         root.addView(controlsTitle, verticalParams(0, dp(8)));
         TextView controls = text(
-                "Tap the lower command zone to reveal. Hold to simulate voice against the active event. Swipe left or right between fixtures. Swipe upward to dissolve the information back into the artwork.",
+                "The field moves continuously. Tap the lower command zone to reveal. Hold to simulate voice against the active event. Swipe left or right between fixtures. Swipe upward to dissolve the information back into the artwork.",
                 14,
                 Color.argb(158, 226, 234, 238)
         );
