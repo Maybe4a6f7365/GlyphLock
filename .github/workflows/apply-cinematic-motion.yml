@@ -35,12 +35,24 @@ jobs:
           gzip -dc /tmp/cinematic-motion.patch.gz > /tmp/cinematic-motion.patch
           echo "3e067e31a7c4012211dad77c83c578abccd8be3da856463b419a917bac418d6b  /tmp/cinematic-motion.patch" | sha256sum --check --strict
 
-      - name: Apply and commit motion pack
+      - name: Apply source changes that match repository main
         shell: bash
         run: |
           set -euo pipefail
-          git apply --check /tmp/cinematic-motion.patch
-          git apply --index /tmp/cinematic-motion.patch
+
+          EXCLUDES=(
+            --exclude=.github/workflows/ci.yml
+            --exclude=.gitignore
+            --exclude=README.md
+            --exclude=apps/android/app/build.gradle.kts
+            --exclude=apps/visual-lab/dist/index.html
+            --exclude=apps/visual-lab/dist/main.js
+            --exclude=apps/visual-lab/dist/main.js.map
+            --exclude=scripts/generate_scene_masks.py
+          )
+
+          git apply --check "${EXCLUDES[@]}" /tmp/cinematic-motion.patch
+          git apply --index "${EXCLUDES[@]}" /tmp/cinematic-motion.patch
           rm -rf .bootstrap
 
           git config user.name "github-actions[bot]"
