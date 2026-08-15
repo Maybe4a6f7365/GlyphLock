@@ -1,0 +1,51 @@
+name: Make DemoCatalog unit-test safe
+
+on:
+  push:
+    branches:
+      - feature/morph-quality-v070
+    paths:
+      - .github/workflows/fix-demo-catalog-color.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Remove Android framework color calls from fixture catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("apps/android/app/src/main/java/dev/glyphlock/wallpaper/DemoCatalog.java")
+          text = path.read_text(encoding="utf-8")
+
+          android_import = "import android.graphics.Color;\n\n"
+          constructor = "    private DemoCatalog() {}\n"
+          helper = """    private DemoCatalog() {}\n\n    /** Pure-Java ARGB packing keeps fixture metadata available to local JVM tests. */\n    private static int rgb(int red, int green, int blue) {\n        return 0xFF000000\n                | ((red & 0xFF) << 16)\n                | ((green & 0xFF) << 8)\n                | (blue & 0xFF);\n    }\n"""
+
+          if android_import not in text:
+              raise SystemExit("Expected android.graphics.Color import was not found")
+          if constructor not in text:
+              raise SystemExit("Expected DemoCatalog constructor anchor was not found")
+          if "Color.rgb(" not in text:
+              raise SystemExit("Expected Color.rgb calls were not found")
+
+          text = text.replace(android_import, "", 1)
+          text = text.replace(constructor, helper, 1)
+          text = text.replace("Color.rgb(", "rgb(")
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/android/app/src/main/java/dev/glyphlock/wallpaper/DemoCatalog.java
+          git commit -m "fix: keep DemoCatalog pure Java for local unit tests"
+          git push origin HEAD:feature/morph-quality-v070
