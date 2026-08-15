@@ -21,6 +21,12 @@ jobs:
       - run: python scripts/generate_scene_masks.py
       - run: python scripts/check_morph_first.py
       - run: python scripts/check_theme_catalog.py
+      - run: python scripts/check_semantic_composition.py
+      - run: python scripts/build_mask_contact_sheet.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: glyphlock-design-contact-sheet
+          path: build/review/glyphlock-mask-contact-sheet.png
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -44,6 +50,7 @@ jobs:
       - run: python scripts/generate_scene_masks.py
       - run: python scripts/check_morph_first.py
       - run: python scripts/check_theme_catalog.py
+      - run: python scripts/check_semantic_composition.py
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -58,5 +65,5 @@ jobs:
         run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: GlyphLock-aesthetic-design-pack-debug-apk
+          name: GlyphLock-semantic-compositions-v070-debug-apk
           path: apps/android/app/build/outputs/apk/debug/app-debug.apk
