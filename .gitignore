@@ -25,9 +25,11 @@ glyphlock-transform.gif
 
 GlyphLock-Visual-Lab.html
 
-# Generated procedural scene masks (the original three legacy masks remain tracked)
-scene_cipher_cathedral.png
-scene_fusion_core.png
-scene_neural_halo.png
-scene_packet_bloom.png
-scene_quantum_lattice.png
+# Generated procedural scene masks. Existing tracked legacy files remain tracked.
+apps/visual-lab/public/assets/scene_*.png
+apps/visual-lab/public/assets/wallpaper_thumbnail.png
+apps/android/app/src/main/res/drawable-nodpi/scene_*.png
+apps/android/app/src/main/res/drawable/wallpaper_thumbnail.png
+apps/visual-lab/dist/
+build/review/
+review/

@@ -629,6 +629,145 @@ def dyson_relay() -> Image.Image:
     return add_grain(edge_fade(composite(base, soft, detail, 18)), 1960, 8)
 
 
+
+def spectral_observatory() -> Image.Image:
+    """A radio observatory whose dish, wavefronts, and spectrum become one signal field."""
+    base, soft, detail, s, d = layered_canvas()
+    cx, cy = W // 2, 970
+    rng = random.Random(161803)
+
+    # Celestial phase shells: restrained near the clock, increasingly dense toward the receiver.
+    for index, (rx, ry) in enumerate(((250, 145), (390, 235), (565, 340), (760, 470), (960, 610))):
+        fill = max(10, 70 - index * 12)
+        d.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), outline=fill, width=max(1, 4-index//2))
+
+    # Parabolic dish. Multiple nested contours read as a precision instrument instead of a flat icon.
+    rim_y = 900
+    outer = []
+    inner = []
+    for i in range(121):
+        t = i / 120
+        x = cx - 410 + 820 * t
+        u = (x - cx) / 410
+        y = rim_y + 245 * (u * u)
+        outer.append((int(x), int(y)))
+        inner.append((int(x), int(y + 52 + 20 * (1 - u*u))))
+    s.polygon(outer + list(reversed(inner)), fill=54)
+    d.line(outer, fill=210, width=8, joint='curve')
+    d.line(inner, fill=86, width=4, joint='curve')
+
+    # Dish ribs and feed assembly.
+    for i in range(17):
+        t = i / 16
+        x = int(cx - 390 + 780 * t)
+        u = (x - cx) / 390
+        y = int(rim_y + 230 * u*u)
+        d.line((x, y, cx, cy + 275), fill=50 + (i % 4) * 20, width=2)
+    d.line((cx, cy - 120, cx, cy + 480), fill=180, width=7)
+    d.ellipse((cx - 34, cy - 152, cx + 34, cy - 84), fill=250)
+    d.ellipse((cx - 88, cy - 206, cx + 88, cy - 30), outline=132, width=5)
+    for arm in (-1, 1):
+        d.line((cx, cy - 98, cx + arm * 212, rim_y + 42), fill=120, width=4)
+
+    # Spectrum waterfall behind and below the focal point.
+    for col in range(72):
+        x = 88 + col * 13
+        phase = math.sin(col * 0.47) + 0.52 * math.sin(col * 1.31)
+        peak = int(300 + 235 * abs(phase))
+        for band in range(0, peak, 18):
+            y = 1420 + band
+            value = int(24 + 120 * (1 - band / max(1, peak)))
+            if col % 9 == 0:
+                value += 35
+            d.line((x, y, x, y + 10), fill=min(220, value), width=2)
+
+    # Signal trajectories and interferometer stations.
+    for i in range(22):
+        angle = -1.05 + 2.1 * i / 21
+        length = 410 + (i % 5) * 62
+        end = (int(cx + math.sin(angle) * length), int(cy - 115 - math.cos(angle) * length * .55))
+        control = (int(cx + math.sin(angle) * length * .45), int(cy - 115 - math.cos(angle) * length * .28))
+        d.line(bezier((cx, cy - 115), control, end, 44), fill=28 + (i % 6) * 18, width=2, joint='curve')
+        ex, ey = end
+        d.ellipse((ex-4, ey-4, ex+4, ey+4), fill=120 + (i % 5) * 24)
+
+    for _ in range(140):
+        x = rng.randint(54, W - 54)
+        y = rng.randint(220, 2130)
+        if rng.random() < .58 and 760 < y < 1320:
+            continue
+        value = rng.randint(18, 92)
+        d.point((x, y), fill=value)
+        if rng.random() < .16:
+            d.line((x - rng.randint(4, 14), y, x + rng.randint(4, 14), y), fill=value, width=1)
+
+    # Pedestal and calibration rails.
+    d.rounded_rectangle((cx - 118, 1240, cx + 118, 2110), 38, outline=112, width=6)
+    for y in range(1340, 2040, 56):
+        half = 76 + int(18 * math.sin(y / 73))
+        d.line((cx-half, y, cx+half, y), fill=38 + (y // 56) % 5 * 18, width=2)
+
+    return add_grain(edge_fade(composite(base, soft, detail, 15)), 161803, 8)
+
+
+def recursive_monolith() -> Image.Image:
+    """Nested impossible architecture with a deep semantic aperture and recursive rails."""
+    base, soft, detail, s, d = layered_canvas()
+    cx, cy = W // 2, 990
+
+    # Sculptural monolith body with a subtle perspective taper.
+    shell = [(cx-280, 260), (cx+280, 260), (cx+345, 2020), (cx, 2220), (cx-345, 2020)]
+    s.polygon(shell, fill=34)
+    d.line(shell + [shell[0]], fill=134, width=8, joint='curve')
+
+    # Recursive projected doorways. Each frame is deliberately offset so the structure feels
+    # impossible instead of becoming another centered tesseract.
+    for depth in range(11):
+        t = depth / 10
+        top = int(350 + t * 430)
+        bottom = int(1940 - t * 420)
+        half_top = int(230 * (1 - t * .70))
+        half_bottom = int(276 * (1 - t * .72))
+        offset = int(math.sin(depth * 0.92) * 72 * (1 - t * .45))
+        frame = [
+            (cx - half_top + offset, top),
+            (cx + half_top + offset, top),
+            (cx + half_bottom - offset, bottom),
+            (cx - half_bottom - offset, bottom),
+        ]
+        fill = 48 + depth * 15
+        d.line(frame + [frame[0]], fill=min(224, fill), width=max(2, 7 - depth // 2), joint='curve')
+        if depth < 10:
+            # Asymmetric recursive connectors create a visual path through the stack.
+            side = -1 if depth % 2 == 0 else 1
+            d.line((frame[1 if side > 0 else 0], (cx + side * 42, int((top + bottom) * .5))), fill=max(30, fill - 12), width=2)
+
+    # Central aperture: long enough to be transformed into language without reading like a card.
+    s.rounded_rectangle((cx - 86, 720, cx + 86, 1500), 44, fill=112)
+    d.rounded_rectangle((cx - 86, 720, cx + 86, 1500), 44, outline=236, width=7)
+    for y in range(790, 1440, 42):
+        width = 46 + int(16 * math.sin(y / 67))
+        d.line((cx-width, y, cx+width, y), fill=56 + (y // 42) % 5 * 22, width=2)
+    d.ellipse((cx - 24, cy - 24, cx + 24, cy + 24), fill=255)
+
+    # Vertical recursion rails and horizon notches.
+    for side in (-1, 1):
+        rail_x = cx + side * 395
+        d.line((rail_x, 240, rail_x, 2110), fill=34, width=3)
+        for y in range(300, 2070, 61):
+            length = 16 + ((y // 61) % 6) * 8
+            d.line((rail_x - side * length, y, rail_x + side * 4, y), fill=42 + (y // 61) % 5 * 18, width=2)
+
+    # Fine recursion echoes and diagonal fold planes.
+    for i in range(16):
+        y = 390 + i * 103
+        span = 310 - min(230, i * 9)
+        d.line((cx-span, y, cx+span, y + (i % 3 - 1) * 24), fill=22 + (i % 5) * 16, width=2)
+    d.line((110, 430, cx-130, cy, 140, 1990), fill=32, width=3, joint='curve')
+    d.line((W-110, 430, cx+130, cy, W-140, 1990), fill=32, width=3, joint='curve')
+
+    return add_grain(edge_fade(composite(base, soft, detail, 17)), 271828, 8)
+
 def save(name: str, img: Image.Image):
     OUT_WEB.mkdir(parents=True, exist_ok=True)
     OUT_ANDROID.mkdir(parents=True, exist_ok=True)
@@ -668,6 +807,8 @@ def main():
     save("interference_field", interference_field())
     save("cryo_vault", cryo_vault())
     save("dyson_relay", dyson_relay())
+    save("spectral_observatory", spectral_observatory())
+    save("recursive_monolith", recursive_monolith())
     thumbnail()
     print("generated")
 

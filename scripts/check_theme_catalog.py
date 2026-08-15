@@ -21,7 +21,19 @@ if generated != android_masks or generated != web_themes:
         f"web only: {sorted(web_themes - generated)}"
     )
 
-if len(generated) < 14:
-    raise SystemExit(f"expected at least 14 themes, found {len(generated)}")
+if len(generated) < 16:
+    raise SystemExit(f"expected at least 16 themes, found {len(generated)}")
 
-print(f"theme catalogues aligned: {len(generated)} themes")
+required = {"spectral_observatory", "recursive_monolith"}
+missing = required - generated
+if missing:
+    raise SystemExit(f"missing v0.7 semantic-composition themes: {sorted(missing)}")
+
+android_compositions = set(re.findall(r'CompositionStyle\.([A-Z_]+)', android))
+web_compositions = set(re.findall(r"composition:\s*'([a-z_]+)'", web))
+if len(android_compositions) < 6 or len(web_compositions) < 6:
+    raise SystemExit(
+        f"expected six composition grammars; android={sorted(android_compositions)} web={sorted(web_compositions)}"
+    )
+
+print(f"theme catalogues aligned: {len(generated)} themes, six composition grammars")

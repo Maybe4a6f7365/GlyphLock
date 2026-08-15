@@ -15,7 +15,7 @@ This phase does not test intelligence, connectors, autonomy, or cloud infrastruc
 | Fixture | Signal | Visual emphasis | Simulated result |
 |---|---|---|---|
 | Important mail | A meeting moved | Cool converging glyphs | Availability checked and draft prepared |
-| Calendar conflict | Travel overlap | Warm compressed cavity | Alternative slot found |
+| Calendar conflict | Travel overlap | Warm intersecting topology | Alternative slot found |
 | Deployment | Rollback completed | Violet structured signal | Cause isolated |
 
 ## State machine

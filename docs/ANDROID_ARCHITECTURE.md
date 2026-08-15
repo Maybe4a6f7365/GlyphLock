@@ -1,10 +1,10 @@
-# Android Architecture
+# Android architecture
 
 ## Components
 
 ```text
 MainActivity
-  ├── choose local theme/event
+  ├── choose local theme/event/quality
   ├── open interactive preview
   └── launch live-wallpaper picker
 
@@ -21,44 +21,47 @@ GlyphWallpaperService
         └── GlyphSceneRenderer
 ```
 
-## Threading
+## Scene construction
 
-Scene construction is intentionally separated from drawing:
+Scene construction is separated from drawing:
 
 ```text
 background scene executor
-  ├── mask decoding
-  ├── glyph sampling
-  ├── static bitmap rasterization
-  ├── text geometry
-  └── particle mapping
+  ├── decode procedural mask
+  ├── sample dense glyph field
+  ├── rasterise ambient base
+  ├── select persistent morph sources
+  ├── compile event/result target glyphs
+  ├── assign targets spatially
+  └── publish immutable Scene
 
-main / wallpaper thread
-  ├── immutable scene swap
-  ├── frame state update
-  ├── bitmap composition
-  └── live particle drawing
+wallpaper / preview thread
+  ├── update ExperienceController frame
+  ├── draw ambient raster during handoff
+  ├── draw bounded ambient glyph subset
+  ├── draw persistent semantic topology
+  └── scale internal scene to surface
 ```
 
 Stale background builds are rejected using a generation counter.
 
+## Memory and quality profiles
+
+The renderer keeps one dense ambient bitmap and glyph topology data. It does not keep event or result bitmaps.
+
+- **Eco:** 540 px internal width, up to 1,200 morph glyphs.
+- **Balanced:** 720 px internal width, up to 2,700 morph glyphs.
+- **Lux:** 960 px internal width, up to 4,300 morph glyphs.
+
+Lux is the current design-review default; device profiling will determine the eventual runtime default.
+
 ## Frame scheduling
 
-- No frame loop while wallpaper is invisible.
-- 16 ms scheduling only during reveal, collapse, listening, and result transitions.
-- Focused and ambient states are static after their final frame.
-- Scene rebuilds request one new frame after completion.
+- No frame loop while the wallpaper is invisible.
+- Active scheduling during wake, reveal, listening, result, and collapse.
+- The focused reading state retains only restrained structural movement.
+- Scene rebuilds request a frame after immutable-scene publication.
 
-## Memory strategy
+## Future renderer
 
-The renderer caps its internal width at 720 pixels and scales the result to the surface. It keeps three state bitmaps:
-
-- ambient
-- focused event
-- simulated result
-
-This is intentionally conservative for a proof. A production renderer would likely use GPU instancing, SDF/MSDF glyph atlases, adaptive level of detail, and a cached static base layer.
-
-## Lock-screen constraints
-
-A live wallpaper is below system UI. It does not own the clock, biometric prompt, emergency affordance, or every touch gesture. OEM launchers and keyguards may intercept input. The full-screen preview is therefore the deterministic interaction test; wallpaper touch remains best effort.
+A production-quality next step could replace Canvas glyph drawing with GPU instancing and SDF/MSDF atlases without changing the scene, target, or interaction contracts.

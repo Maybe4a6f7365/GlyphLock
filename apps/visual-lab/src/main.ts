@@ -15,8 +15,13 @@ type ThemeId =
   | 'interference_field'
   | 'cryo_vault'
   | 'dyson_relay'
+  | 'spectral_observatory'
+  | 'recursive_monolith'
 type EventId = 'mail' | 'calendar' | 'github' | 'security' | 'network' | 'model'
-type MotionStyle = 'flow' | 'orbital' | 'circuit' | 'radial' | 'bloom'
+type MotionStyle = 'flow' | 'orbital' | 'circuit' | 'radial' | 'bloom' | 'wave' | 'fold'
+type CompositionStyle = 'figure' | 'core' | 'orbital_band' | 'architecture' | 'splice' | 'field'
+type TargetRole = 'title' | 'summary' | 'meta' | 'action' | 'structure'
+type PushAxis = 'horizontal' | 'vertical' | 'radial'
 type MotionProfile = 'calm' | 'cinematic' | 'hyper'
 type VisualState = 'ambient' | 'revealing' | 'focused' | 'listening' | 'resultTransition' | 'result' | 'collapsing'
 
@@ -53,11 +58,20 @@ interface TargetGlyph {
   size: number
   color: [number, number, number]
   text: boolean
+  role: TargetRole
+}
+
+interface TextBand {
+  bounds: { left: number; top: number; right: number; bottom: number }
+  pushAxis: PushAxis
 }
 
 interface TargetLayout {
   targets: TargetGlyph[]
+  textBands: TextBand[]
   bounds: { left: number; top: number; right: number; bottom: number }
+  centerX: number
+  centerY: number
 }
 
 interface MorphGlyph {
@@ -73,12 +87,14 @@ interface MorphGlyph {
 interface ThemeSpec {
   id: ThemeId
   label: string
-  cavityY: number
+  semanticY: number
+  semanticWidth: number
   palette: string
   tint: [number, number, number]
   atmosphereY: number
   densityBias: number
   motion: MotionStyle
+  composition: CompositionStyle
   motionStrength: number
 }
 
@@ -128,27 +144,29 @@ const EVENTS: DemoEvent[] = [
 ]
 
 const THEMES: ThemeSpec[] = [
-  { id: 'sentinel', label: 'Sentinel', cavityY: 1320, palette: ' .·,:;+=x1I|/\\()[]{}<>#08@', tint: [206, 229, 240], atmosphereY: 650, densityBias: 0, motion: 'flow', motionStrength: .72 },
-  { id: 'moth', label: 'Moth', cavityY: 1370, palette: ' .·,:;~+xvV(){}<>*#@', tint: [230, 219, 188], atmosphereY: 910, densityBias: .006, motion: 'flow', motionStrength: .84 },
-  { id: 'orbit', label: 'Orbit', cavityY: 1440, palette: ' .·,:;~<>/\\()0O@', tint: [208, 199, 244], atmosphereY: 815, densityBias: -.004, motion: 'orbital', motionStrength: .82 },
-  { id: 'neural_halo', label: 'Neural Halo', cavityY: 1390, palette: ' .·:;~λψ∇01+<>@', tint: [137, 235, 221], atmosphereY: 840, densityBias: .012, motion: 'radial', motionStrength: 1.05 },
-  { id: 'cipher_cathedral', label: 'Cipher Cathedral', cavityY: 1344, palette: ' .:;|[]{}0x#AF16+-', tint: [246, 194, 119], atmosphereY: 930, densityBias: .010, motion: 'circuit', motionStrength: .92 },
-  { id: 'quantum_lattice', label: 'Quantum Lattice', cavityY: 1464, palette: ' .·:~λψ∂∇∞01()<>@', tint: [196, 178, 255], atmosphereY: 910, densityBias: .008, motion: 'orbital', motionStrength: 1.08 },
-  { id: 'fusion_core', label: 'Fusion Core', cavityY: 1464, palette: ' .:;=+⊙○()[]|01#@', tint: [126, 221, 250], atmosphereY: 930, densityBias: .004, motion: 'orbital', motionStrength: 1.18 },
-  { id: 'packet_bloom', label: 'Packet Bloom', cavityY: 1416, palette: ' .·:;<>[]{}:/\\01TCPIP+@', tint: [166, 240, 193], atmosphereY: 990, densityBias: .012, motion: 'bloom', motionStrength: 1.05 },
-  { id: 'event_horizon', label: 'Event Horizon', cavityY: 1416, palette: ' .·:;~O0()[]<>∞λ01#@', tint: [255, 173, 112], atmosphereY: 920, densityBias: .010, motion: 'orbital', motionStrength: 1.24 },
-  { id: 'tesseract_engine', label: 'Tesseract Engine', cavityY: 1368, palette: ' .:;|+-=[]{}<>01XYZW', tint: [164, 211, 255], atmosphereY: 870, densityBias: .008, motion: 'circuit', motionStrength: 1.08 },
-  { id: 'helix_array', label: 'Helix Array', cavityY: 1464, palette: ' .·:;~ATCGλψ01/\\()[]', tint: [151, 238, 211], atmosphereY: 940, densityBias: .012, motion: 'flow', motionStrength: 1.03 },
-  { id: 'interference_field', label: 'Interference Field', cavityY: 1392, palette: ' .·:;~≈∿λψ01()<>+@', tint: [239, 176, 242], atmosphereY: 840, densityBias: .006, motion: 'radial', motionStrength: 1.12 },
-  { id: 'cryo_vault', label: 'Cryo Vault', cavityY: 1440, palette: ' .:;|[]{}HEXICE01+*', tint: [182, 232, 255], atmosphereY: 980, densityBias: .008, motion: 'circuit', motionStrength: .96 },
-  { id: 'dyson_relay', label: 'Dyson Relay', cavityY: 1416, palette: ' .·:;O0()[]{}<>01+*#@', tint: [255, 214, 140], atmosphereY: 860, densityBias: .010, motion: 'orbital', motionStrength: 1.14 },
+  { id: 'sentinel', label: 'Sentinel', semanticY: .53, semanticWidth: .72, palette: ' .·,:;+=x1I|/\\()[]{}<>#08@', tint: [206, 229, 240], atmosphereY: 650, densityBias: 0, motion: 'flow', composition: 'figure', motionStrength: .72 },
+  { id: 'moth', label: 'Moth', semanticY: .51, semanticWidth: .69, palette: ' .·,:;~+xvV(){}<>*#@', tint: [230, 219, 188], atmosphereY: 910, densityBias: .006, motion: 'bloom', composition: 'figure', motionStrength: .88 },
+  { id: 'orbit', label: 'Orbit', semanticY: .55, semanticWidth: .72, palette: ' .·,:;~<>/\\()0O@', tint: [208, 199, 244], atmosphereY: 815, densityBias: -.004, motion: 'orbital', composition: 'orbital_band', motionStrength: .86 },
+  { id: 'neural_halo', label: 'Neural Halo', semanticY: .53, semanticWidth: .68, palette: ' .·:;~λψ∇01+<>@', tint: [137, 235, 221], atmosphereY: 840, densityBias: .012, motion: 'radial', composition: 'core', motionStrength: 1.05 },
+  { id: 'cipher_cathedral', label: 'Cipher Cathedral', semanticY: .53, semanticWidth: .62, palette: ' .:;|[]{}0x#AF16+-', tint: [246, 194, 119], atmosphereY: 930, densityBias: .010, motion: 'circuit', composition: 'architecture', motionStrength: .92 },
+  { id: 'quantum_lattice', label: 'Quantum Lattice', semanticY: .56, semanticWidth: .72, palette: ' .·:~λψ∂∇∞01()<>@', tint: [196, 178, 255], atmosphereY: 910, densityBias: .008, motion: 'wave', composition: 'field', motionStrength: 1.08 },
+  { id: 'fusion_core', label: 'Fusion Core', semanticY: .55, semanticWidth: .66, palette: ' .:;=+⊙○()[]|01#@', tint: [126, 221, 250], atmosphereY: 930, densityBias: .004, motion: 'orbital', composition: 'core', motionStrength: 1.18 },
+  { id: 'packet_bloom', label: 'Packet Bloom', semanticY: .55, semanticWidth: .68, palette: ' .·:;<>[]{}:/\\01TCPIP+@', tint: [166, 240, 193], atmosphereY: 990, densityBias: .012, motion: 'bloom', composition: 'core', motionStrength: 1.05 },
+  { id: 'event_horizon', label: 'Event Horizon', semanticY: .54, semanticWidth: .70, palette: ' .·:;~O0()[]<>∞λ01#@', tint: [255, 173, 112], atmosphereY: 920, densityBias: .010, motion: 'orbital', composition: 'orbital_band', motionStrength: 1.24 },
+  { id: 'tesseract_engine', label: 'Tesseract Engine', semanticY: .52, semanticWidth: .60, palette: ' .:;|+-=[]{}<>01XYZW', tint: [164, 211, 255], atmosphereY: 870, densityBias: .008, motion: 'fold', composition: 'architecture', motionStrength: 1.08 },
+  { id: 'helix_array', label: 'Helix Array', semanticY: .56, semanticWidth: .62, palette: ' .·:;~ATCGλψ01/\\()[]', tint: [151, 238, 211], atmosphereY: 940, densityBias: .012, motion: 'flow', composition: 'splice', motionStrength: 1.03 },
+  { id: 'interference_field', label: 'Interference Field', semanticY: .54, semanticWidth: .72, palette: ' .·:;~≈∿λψ01()<>+@', tint: [239, 176, 242], atmosphereY: 840, densityBias: .006, motion: 'wave', composition: 'field', motionStrength: 1.12 },
+  { id: 'cryo_vault', label: 'Cryo Vault', semanticY: .56, semanticWidth: .58, palette: ' .:;|[]{}HEXICE01+*', tint: [182, 232, 255], atmosphereY: 980, densityBias: .008, motion: 'circuit', composition: 'architecture', motionStrength: .96 },
+  { id: 'dyson_relay', label: 'Dyson Relay', semanticY: .55, semanticWidth: .66, palette: ' .·:;O0()[]{}<>01+*#@', tint: [255, 214, 140], atmosphereY: 860, densityBias: .010, motion: 'orbital', composition: 'orbital_band', motionStrength: 1.14 },
+  { id: 'spectral_observatory', label: 'Spectral Observatory', semanticY: .55, semanticWidth: .72, palette: ' .·:;~≈∿RFHz01[]<>/\\', tint: [145, 225, 255], atmosphereY: 936, densityBias: .011, motion: 'wave', composition: 'field', motionStrength: 1.08 },
+  { id: 'recursive_monolith', label: 'Recursive Monolith', semanticY: .54, semanticWidth: .58, palette: ' .:;|+-=[]{}<>01∞', tint: [221, 205, 255], atmosphereY: 912, densityBias: .009, motion: 'fold', composition: 'architecture', motionStrength: 1.10 },
 ]
 
 const THEME_BY_ID = new Map(THEMES.map(theme => [theme.id, theme] as const))
 const MOTION_PROFILES: Record<MotionProfile, { label: string; speed: number; amplitude: number; liveCount: number; morphCount: number }> = {
-  calm: { label: 'Calm', speed: .52, amplitude: .58, liveCount: 520, morphCount: 1450 },
-  cinematic: { label: 'Cinematic', speed: 1, amplitude: 1, liveCount: 980, morphCount: 2300 },
-  hyper: { label: 'Hyper', speed: 1.42, amplitude: 1.36, liveCount: 1450, morphCount: 3000 },
+  calm: { label: 'Calm', speed: .52, amplitude: .58, liveCount: 760, morphCount: 2200 },
+  cinematic: { label: 'Cinematic', speed: 1, amplitude: 1, liveCount: 1450, morphCount: 4200 },
+  hyper: { label: 'Hyper', speed: 1.42, amplitude: 1.36, liveCount: 1900, morphCount: 5000 },
 }
 
 const INTERNAL_W = 1080
@@ -332,8 +350,8 @@ class GlyphLockRenderer {
     const diagonal = Math.hypot(INTERNAL_W, INTERNAL_H)
 
     this.morphGlyphs = sources.map((source, index) => {
-      const eventTarget = eventAssignments[index] ?? this.buildFillerTarget(source, eventLayout.bounds, index, false)
-      const resultTarget = resultAssignments[index] ?? this.buildFillerTarget(source, resultLayout.bounds, index, true)
+      const eventTarget = eventAssignments[index] ?? this.buildFillerTarget(source, eventLayout, index, false)
+      const resultTarget = resultAssignments[index] ?? this.buildFillerTarget(source, resultLayout, index, true)
       const distance = Math.hypot(source.x - focusX, source.y - focusY) / diagonal
       const n = hash(index, source.x, source.y)
       return {
@@ -342,10 +360,18 @@ class GlyphLockRenderer {
         resultTarget,
         phase: n * Math.PI * 2,
         arc: (28 + n * 88) * this.themeSpec.motionStrength,
-        delay: .01 + .30 * distance + .075 * n,
-        duration: .52 + .17 * (1 - distance) + .06 * n,
+        delay: .01 + .225 * distance + this.roleDelay(eventTarget.role) + .045 * n,
+        duration: .56 + .13 * (1 - distance) + .055 * n,
       }
     })
+  }
+
+  private roleDelay(role: TargetRole): number {
+    if (role === 'title') return 0
+    if (role === 'summary') return .026
+    if (role === 'meta') return .052
+    if (role === 'action') return .074
+    return .095
   }
 
   private selectMorphSources(): GlyphPoint[] {
@@ -367,69 +393,186 @@ class GlyphLockRenderer {
   private buildTargetLayout(result: boolean): TargetLayout {
     const event = this.event
     const targets: TargetGlyph[] = []
-    const left = 124
-    const contentWidth = 832
-    const top = this.themeSpec.cavityY - 84
-    let y = top
+    const textBands: TextBand[] = []
+    const spec = this.themeSpec
+    const centerX = INTERNAL_W / 2
+    const contentWidth = INTERNAL_W * spec.semanticWidth
+    const left = centerX - contentWidth / 2
+    const right = centerX + contentWidth / 2
+    const anchorY = INTERNAL_H * spec.semanticY
+    const topOffset = spec.composition === 'architecture' ? INTERNAL_H * .125
+      : spec.composition === 'splice' ? INTERNAL_H * .118
+      : spec.composition === 'field' ? INTERNAL_H * .112
+      : spec.composition === 'orbital_band' ? INTERNAL_H * .105
+      : INTERNAL_H * .108
+    const top = anchorY - topOffset
     const accent = event.accent
 
     const eyebrow = result ? 'LOCAL DEMO · ACTION SIMULATED' : event.eyebrow
-    const eyebrowSize = 22
-    y += eyebrowSize
-    this.addLineTargets(targets, eyebrow, left, y, eyebrowSize, accent, .94, true, 600)
-
-    y += 72
     const title = result ? event.resultTitle : event.title
-    const titleSize = this.fitTextSize(title, contentWidth, 60, 38, 520)
-    y += titleSize
-    this.addLineTargets(targets, title, left, y, titleSize, [241, 247, 250], 1, true, 520)
-
-    y += 66
     const summary = result ? event.resultSummary : event.summary
-    const summarySize = 30
-    for (const line of this.wrapText(summary, contentWidth, summarySize, 4)) {
-      y += summarySize * 1.48
-      this.addLineTargets(targets, line, left, y, summarySize, [214, 225, 231], .86, true, 400)
-    }
-
-    y += 80
     const action = result ? 'TAP TO RETURN' : event.action
-    const actionSize = 20
-    y += actionSize
-    this.addLineTargets(targets, action, left, y, actionSize, accent, .96, true, 600)
+    const eyebrowSize = 20
+    const titleSize = this.fitTextSize(title, contentWidth, 56, 35, 520)
+    const summarySize = 27
+    const actionSize = 19
 
-    const bounds = { left: left - 58, top: top - 42, right: left + contentWidth + 58, bottom: y + 62 }
-    this.addFragmentedRails(targets, bounds, result)
-    return { targets, bounds }
+    const metaY = top + eyebrowSize
+    const titleY = metaY + INTERNAL_H * .034 + titleSize
+    let summaryY = titleY + INTERNAL_H * .026
+    const summaryLines = this.wrapText(summary, contentWidth, summarySize, 3)
+    const summaryBaselines: number[] = []
+    for (const _line of summaryLines) {
+      summaryY += summarySize * 1.44
+      summaryBaselines.push(summaryY)
+    }
+    const actionY = summaryY + INTERNAL_H * .034 + actionSize
+
+    const primaryAlign: CanvasTextAlign = spec.composition === 'architecture' ? 'left' : 'center'
+    const metaAlign: CanvasTextAlign = spec.composition === 'field' ? 'left' : primaryAlign
+    const actionAlign: CanvasTextAlign = spec.composition === 'field' ? 'right' : primaryAlign
+    const primaryAnchor = primaryAlign === 'left' ? left : centerX
+    const metaAnchor = metaAlign === 'left' ? left : centerX
+    const actionAnchor = actionAlign === 'right' ? right : primaryAnchor
+    const pushAxis = this.pushAxisFor(spec.composition)
+
+    // High-value language targets are assigned first; the remaining source field becomes structure.
+    this.addAlignedLineTargets(targets, textBands, title, primaryAnchor, titleY, titleSize, [241, 247, 250], 1, primaryAlign, 'title', pushAxis, 520)
+    summaryLines.forEach((line, index) => {
+      const lineAnchor = spec.composition === 'field' ? centerX + (index % 2 === 0 ? -27 : 27) : primaryAnchor
+      const lineAlign: CanvasTextAlign = spec.composition === 'field' ? 'center' : primaryAlign
+      this.addAlignedLineTargets(targets, textBands, line, lineAnchor, summaryBaselines[index]!, summarySize, [214, 225, 231], .90, lineAlign, 'summary', pushAxis, 400)
+    })
+    this.addAlignedLineTargets(targets, textBands, eyebrow, metaAnchor, metaY, eyebrowSize, accent, .96, metaAlign, 'meta', pushAxis, 600)
+    this.addAlignedLineTargets(targets, textBands, action, actionAnchor, actionY, actionSize, accent, .98, actionAlign, 'action', pushAxis, 600)
+
+    const bounds = {
+      left: left - INTERNAL_W * .035,
+      top: top - INTERNAL_H * .015,
+      right: right + INTERNAL_W * .035,
+      bottom: actionY + INTERNAL_H * .022,
+    }
+    this.addSemanticStructure(targets, bounds, result)
+    return { targets, textBands, bounds, centerX, centerY: anchorY }
   }
 
-  private addLineTargets(
-    targets: TargetGlyph[], text: string, left: number, baseline: number, size: number,
-    color: [number, number, number], alpha: number, targetText: boolean, weight: number,
+  private pushAxisFor(style: CompositionStyle): PushAxis {
+    if (style === 'architecture' || style === 'splice') return 'horizontal'
+    if (style === 'field') return 'vertical'
+    return 'radial'
+  }
+
+  private addAlignedLineTargets(
+    targets: TargetGlyph[], bands: TextBand[], text: string, anchorX: number, baseline: number,
+    size: number, color: [number, number, number], alpha: number, align: CanvasTextAlign,
+    role: TargetRole, pushAxis: PushAxis, weight: number,
   ): void {
     this.ctx.font = `${weight} ${size}px ${FONT_STACK}`
-    let x = left
+    const width = this.ctx.measureText(text).width
+    const startX = align === 'center' ? anchorX - width / 2 : align === 'right' ? anchorX - width : anchorX
+    let x = startX
     for (const char of text) {
       const advance = this.ctx.measureText(char).width
-      if (!/\s/.test(char)) targets.push({ x: x + advance / 2, y: baseline, char, size, alpha, color, text: targetText })
+      if (!/\s/.test(char)) targets.push({ x: x + advance / 2, y: baseline, char, size, alpha, color, text: true, role })
       x += advance
     }
+    const padX = size * .52
+    bands.push({
+      bounds: {
+        left: startX - padX,
+        top: baseline - size * 1.26,
+        right: startX + width + padX,
+        bottom: baseline + size * .52,
+      },
+      pushAxis,
+    })
   }
 
-  private addFragmentedRails(
+  private addSemanticStructure(
     targets: TargetGlyph[], bounds: { left: number; top: number; right: number; bottom: number }, result: boolean,
   ): void {
-    const color = mixColor(this.themeSpec.tint, this.event.accent, result ? .52 : .38)
-    for (let i = 0; i < 38; i++) {
-      if (i > 7 && i < 18) continue
-      const x = mix(bounds.left, bounds.right, i / 37)
-      const char = STRUCTURE_GLYPHS[(i * 5 + this.event.id.length) % STRUCTURE_GLYPHS.length] ?? '·'
-      targets.push({ x, y: bounds.top, char, size: 11, alpha: .34, color, text: false })
-      if (i % 2 === 0) targets.push({ x, y: bounds.bottom, char, size: 11, alpha: .24, color, text: false })
+    const color = mixColor(this.themeSpec.tint, this.event.accent, result ? .58 : .46)
+    const centerX = (bounds.left + bounds.right) / 2
+    const centerY = (bounds.top + bounds.bottom) / 2
+    const width = bounds.right - bounds.left
+    const height = bounds.bottom - bounds.top
+    const add = (x: number, y: number, index: number, alpha: number, size = 11.5) => {
+      const char = STRUCTURE_GLYPHS[((index * 5 + 3) % STRUCTURE_GLYPHS.length + STRUCTURE_GLYPHS.length) % STRUCTURE_GLYPHS.length] ?? '·'
+      targets.push({ x, y, char, size, alpha, color, text: false, role: 'structure' })
     }
-    for (let i = 0; i < 22; i++) {
-      if (i > 5 && i < 13) continue
-      targets.push({ x: bounds.left, y: mix(bounds.top, bounds.bottom, i / 21), char: i % 2 === 0 ? '│' : '·', size: 11, alpha: .28, color, text: false })
+
+    switch (this.themeSpec.composition) {
+      case 'figure':
+        for (let i = 0; i < 68; i++) {
+          const t = i / 67
+          const y = mix(bounds.top - INTERNAL_H * .070, bounds.bottom + INTERNAL_H * .080, t)
+          const spread = INTERNAL_W * (.235 + .115 * Math.sin(t * Math.PI))
+          const pulse = Math.sin(t * Math.PI * 5) * INTERNAL_W * .012
+          add(centerX - spread - pulse, y, i, .43)
+          add(centerX + spread + pulse, y, i + 31, .43)
+          if (i % 4 === 0) add(centerX + Math.sin(t * Math.PI * 6) * 16, y, i + 61, .30)
+        }
+        break
+      case 'core':
+        for (let ring = 0; ring < 4; ring++) {
+          const rx = width * (.54 + ring * .090), ry = height * (.54 + ring * .105)
+          const count = 54 + ring * 16
+          for (let i = 0; i < count; i++) {
+            if ((i + ring * 2) % 8 === 0) continue
+            const a = Math.PI * 2 * i / count
+            add(centerX + Math.cos(a) * rx, centerY + Math.sin(a) * ry, i + ring * 73, .42 - ring * .055)
+          }
+        }
+        break
+      case 'orbital_band':
+        for (let band = 0; band < 2; band++) {
+          const count = band === 0 ? 128 : 96
+          for (let i = 0; i < count; i++) {
+            const a = Math.PI * 2 * i / count + band * .21
+            if (Math.abs(Math.sin(a)) < .12 && Math.cos(a) > 0 && i % 3 !== 0) continue
+            const rx = width * (.57 + band * .12 + .04 * Math.sin(a * 3))
+            const ry = height * (.62 + band * .11)
+            add(centerX + Math.cos(a) * rx, centerY + Math.sin(a) * ry, i + band * 131, band === 0 ? .43 : .27)
+          }
+        }
+        break
+      case 'architecture':
+        for (let i = 0; i < 72; i++) {
+          const y = mix(bounds.top - INTERNAL_H * .055, bounds.bottom + INTERNAL_H * .065, i / 71)
+          if (i % 5 !== 1) {
+            add(bounds.left - INTERNAL_W * .067, y, i, .43)
+            add(bounds.right + INTERNAL_W * .067, y, i + 37, .36)
+          }
+          if (i % 6 === 0) add(bounds.left - INTERNAL_W * .025, y, i + 73, .28)
+        }
+        for (let rail = 0; rail < 2; rail++) {
+          const y = rail === 0 ? bounds.top - INTERNAL_H * .038 : bounds.bottom + INTERNAL_H * .043
+          for (let i = 0; i < 42; i++) {
+            if (i > 14 && i < 27 && rail === 0) continue
+            add(mix(bounds.left - 52, bounds.right + 52, i / 41), y, i + rail * 51, rail === 0 ? .36 : .24)
+          }
+        }
+        break
+      case 'splice':
+        for (let i = 0; i < 76; i++) {
+          const t = i / 75, y = mix(bounds.top - INTERNAL_H * .085, bounds.bottom + INTERNAL_H * .085, t)
+          const wave = Math.sin(t * Math.PI * 10) * INTERNAL_W * .072
+          add(bounds.left - 64 + wave, y, i, .43)
+          add(bounds.right + 64 - wave, y, i + 43, .43)
+          if (i % 3 === 0) add(centerX + Math.sin(t * Math.PI * 10) * 10, y, i + 89, .25)
+        }
+        break
+      case 'field':
+        for (let row = -4; row <= 4; row++) {
+          const y = centerY + row * INTERNAL_H * .056
+          for (let i = 0; i < 66; i++) {
+            if ((i + row + 13) % 5 === 0) continue
+            const t = i / 65, x = mix(bounds.left - 96, bounds.right + 96, t)
+            const wave = Math.sin(t * Math.PI * 5 + row * .77) * INTERNAL_H * .011
+            add(x, y + wave, i + row * 29, .22 + .035 * (4 - Math.abs(row)))
+          }
+        }
+        break
     }
   }
 
@@ -445,7 +588,8 @@ class GlyphLockRenderer {
         const source = sources[i]!
         const dx = source.x - target.x
         const dy = (source.y - target.y) * verticalWeight
-        const score = dx * dx + dy * dy - source.alpha * INTERNAL_W * INTERNAL_W * .012
+        const roleBias = target.text ? INTERNAL_W * INTERNAL_W * .010 : INTERNAL_W * INTERNAL_W * .002
+        const score = dx * dx + dy * dy - source.alpha * INTERNAL_W * INTERNAL_W * .012 - roleBias
         if (score < bestScore) { bestScore = score; best = i }
       }
       if (best < 0) break
@@ -457,7 +601,7 @@ class GlyphLockRenderer {
 
   private buildFillerTarget(
     source: GlyphPoint,
-    bounds: { left: number; top: number; right: number; bottom: number },
+    layout: TargetLayout,
     index: number,
     result: boolean,
   ): TargetGlyph {
@@ -473,65 +617,89 @@ class GlyphLockRenderer {
     let x = source.x
     let y = source.y
 
+    // Filler glyphs remain recognisably part of the source artwork. Motion is a
+    // structural deformation, not an evacuation around a notification rectangle.
     switch (spec.motion) {
       case 'orbital': {
-        const rotation = (.20 + n * .26) * (n > .5 ? 1 : -1)
-        const scale = .92 + n * .19
+        const rotation = (.08 + n * .13) * (n > .5 ? 1 : -1)
+        const scale = .96 + n * .10
         const ca = Math.cos(rotation), sa = Math.sin(rotation)
         x = focusX + (vx * ca - vy * sa) * scale
         y = focusY + (vx * sa + vy * ca) * scale
         break
       }
-      case 'circuit':
-        x = Math.round((source.x + (n - .5) * INTERNAL_W * .08) / 44) * 44
-        y = Math.round((source.y + (n - .5) * INTERNAL_H * .04) / 52) * 52
+      case 'circuit': {
+        const gridX = INTERNAL_W * .034, gridY = INTERNAL_H * .018
+        const gx = Math.round((source.x + (n - .5) * INTERNAL_W * .045) / gridX) * gridX
+        const gy = Math.round((source.y + (n - .5) * INTERNAL_H * .025) / gridY) * gridY
+        x = mix(source.x, gx, .58); y = mix(source.y, gy, .58)
         break
+      }
       case 'radial': {
-        const ring = Math.max(radius * (.92 + n * .20), INTERNAL_W * (.20 + n * .32))
-        x = focusX + Math.cos(angle + seed * .10) * ring
-        y = focusY + Math.sin(angle + seed * .10) * ring
+        const ring = radius * (.96 + n * .11)
+        x = focusX + Math.cos(angle + seed * .055) * ring
+        y = focusY + Math.sin(angle + seed * .055) * ring
         break
       }
       case 'bloom': {
-        const petal = Math.sin(angle * 6 + seed) * INTERNAL_W * .05
-        const scale = .92 + n * .18 + petal / Math.max(INTERNAL_W, radius) * .7
-        x = focusX + vx * scale
-        y = focusY + vy * scale
+        const petal = Math.sin(angle * 6 + seed) * INTERNAL_W * .024
+        const scale = .97 + n * .09 + petal / Math.max(INTERNAL_W, radius) * .46
+        x = focusX + vx * scale; y = focusY + vy * scale
+        break
+      }
+      case 'wave':
+        x += Math.sin(source.y * .0105 + seed + n * 4.5) * INTERNAL_W * .030
+        y += Math.sin(source.x * .0090 - seed + n * 3.5) * INTERNAL_H * .010
+        break
+      case 'fold': {
+        const depth = (source.y - focusY) / Math.max(1, INTERNAL_H)
+        const fold = (n > .5 ? 1 : -1) * Math.abs(depth) * INTERNAL_W * .075
+        x = focusX + vx * (.95 + n * .08) + fold
+        y = focusY + vy * (.97 + n * .055)
         break
       }
       case 'flow':
       default:
-        x += Math.sin(source.y * .009 + seed + n * 4) * INTERNAL_W * .055
-        y += Math.cos(source.x * .008 + seed + n * 5) * INTERNAL_H * .016
+        x += Math.sin(source.y * .009 + seed + n * 4) * INTERNAL_W * .030
+        y += Math.cos(source.x * .008 + seed + n * 5) * INTERNAL_H * .010
     }
 
-    const marginX = 60, marginY = 62
-    const protectedArea = { left: bounds.left - marginX, top: bounds.top - marginY, right: bounds.right + marginX, bottom: bounds.bottom + marginY }
-    if (x >= protectedArea.left && x <= protectedArea.right && y >= protectedArea.top && y <= protectedArea.bottom) {
-      const distances = [
-        Math.abs(x - protectedArea.left),
-        Math.abs(protectedArea.right - x),
-        Math.abs(y - protectedArea.top) * .78,
-        Math.abs(protectedArea.bottom - y) * .78,
-      ]
-      const edge = distances.indexOf(Math.min(...distances))
-      if (edge === 0) x = protectedArea.left - marginX * (.25 + n * .6)
-      else if (edge === 1) x = protectedArea.right + marginX * (.25 + n * .6)
-      else if (edge === 2) y = protectedArea.top - marginY * (.3 + n * .8)
-      else y = protectedArea.bottom + marginY * (.3 + n * .8)
-    }
-
-    x = Math.max(20, Math.min(INTERNAL_W - 20, x))
-    y = Math.max(84, Math.min(INTERNAL_H - 60, y))
+    ;[x, y] = this.warpFillerAroundBands(x, y, layout, n)
+    x = Math.max(INTERNAL_W * .018, Math.min(INTERNAL_W * .982, x))
+    y = Math.max(INTERNAL_H * .035, Math.min(INTERNAL_H * .975, y))
     const vocabulary = this.event.glyphs + spec.palette + STRUCTURE_GLYPHS
-    const char = n > .70 ? vocabulary[Math.min(vocabulary.length - 1, Math.floor(n * vocabulary.length))] ?? source.char : source.char
+    const char = n > .82 ? vocabulary[Math.min(vocabulary.length - 1, Math.floor(n * vocabulary.length))] ?? source.char : source.char
     return {
       x, y, char,
-      size: source.size * (.86 + n * .24),
-      alpha: clamp01(source.alpha * (result ? .42 : .50)),
-      color: mixColor(spec.tint, this.event.accent, result ? .38 : .27),
+      size: source.size * (.93 + n * .15),
+      alpha: clamp01(source.alpha * (result ? .64 : .72)),
+      color: mixColor(spec.tint, this.event.accent, result ? .46 : .35),
       text: false,
+      role: 'structure',
     }
+  }
+
+  private warpFillerAroundBands(x: number, y: number, layout: TargetLayout, noise: number): [number, number] {
+    let px = x, py = y
+    for (const band of layout.textBands) {
+      const b = band.bounds
+      if (px < b.left || px > b.right || py < b.top || py > b.bottom) continue
+      const marginX = INTERNAL_W * (.006 + noise * .007)
+      const marginY = INTERNAL_H * (.0025 + noise * .0035)
+      if (band.pushAxis === 'horizontal') {
+        px = Math.abs(px - b.left) <= Math.abs(b.right - px) ? b.left - marginX : b.right + marginX
+      } else if (band.pushAxis === 'vertical') {
+        py = Math.abs(py - b.top) <= Math.abs(b.bottom - py) ? b.top - marginY : b.bottom + marginY
+      } else {
+        const dx = px - layout.centerX, dy = py - layout.centerY
+        const nx = dx / Math.max(1, (b.right - b.left) * .5)
+        const ny = dy / Math.max(1, (b.bottom - b.top) * .5)
+        if (Math.abs(nx) > Math.abs(ny)) px = dx < 0 ? b.left - marginX : b.right + marginX
+        else py = dy < 0 ? b.top - marginY : b.bottom + marginY
+      }
+      break
+    }
+    return [px, py]
   }
 
   private extractGlyphPoints(): GlyphPoint[] {
@@ -633,6 +801,19 @@ class GlyphLockRenderer {
           eventY = u * u * glyph.source.y + 2 * u * moveT * cy + moveT * moveT * ty
           break
         }
+        case 'wave':
+          eventX = mix(glyph.source.x, tx, moveT) + Math.sin(glyph.source.y * .012 + glyph.phase + local * 7) * glyph.arc * .68 * wave
+          eventY = mix(glyph.source.y, ty, moveT) + Math.sin(glyph.source.x * .010 - glyph.phase + local * 5.5) * glyph.arc * .34 * wave
+          break
+        case 'fold': {
+          const direction = Math.sin(glyph.phase) >= 0 ? 1 : -1
+          const cx = focusX + direction * glyph.arc * .55
+          const cy = mix(glyph.source.y, ty, .48)
+          const u = 1 - moveT
+          eventX = u * u * glyph.source.x + 2 * u * moveT * cx + moveT * moveT * tx
+          eventY = u * u * glyph.source.y + 2 * u * moveT * cy + moveT * moveT * ty
+          break
+        }
         case 'flow':
         default:
           eventX = mix(glyph.source.x, tx, moveT) + Math.sin(glyph.phase + local * 5.2) * glyph.arc * wave
@@ -647,44 +828,86 @@ class GlyphLockRenderer {
 
       const activeTarget = result < .5 ? glyph.eventTarget : glyph.resultTarget
       if (!activeTarget.text && local >= .98) {
-        x += Math.sin(seconds * .34 + glyph.phase) * 2.7 * spec.motionStrength
-        y += Math.cos(seconds * .27 + glyph.phase * 1.4) * 1.8 * spec.motionStrength
+        const drift = spec.motionStrength * .62
+        x += Math.sin(seconds * .34 + glyph.phase) * 2.7 * drift
+        y += Math.cos(seconds * .27 + glyph.phase * 1.4) * 1.8 * drift
       }
       if (listening) {
-        const cy = 2110
+        const cy = INTERNAL_H * .88
         const dx = x - INTERNAL_W / 2, dy = y - cy
         const distance = Math.max(1, Math.hypot(dx, dy))
         const pulse = Math.sin(seconds * 6.5 - distance * .020 + glyph.phase)
-        const influence = Math.exp(-distance / 450)
-        x += dx / distance * pulse * 11 * influence
-        y += dy / distance * pulse * 11 * influence
+        const influence = Math.exp(-distance / Math.max(1, INTERNAL_W * .42))
+        x += dx / distance * pulse * INTERNAL_W * .010 * influence
+        y += dy / distance * pulse * INTERNAL_W * .010 * influence
       }
 
-      const sourceFade = 1 - smooth((local - .20) / .52)
-      const targetFade = smooth((local - .16) / .62)
-      const sourceAlpha = glyph.source.alpha * sourceFade * handoff
-      const eventAlpha = glyph.eventTarget.alpha * targetFade * (1 - result)
-      const resultAlpha = glyph.resultTarget.alpha * targetFade * result
+      const eventBlend = smooth((local - .20) / .62)
+      const resultBlend = smooth((result - .14) / .72)
+      let size = mix(glyph.source.size, glyph.eventTarget.size, eventBlend)
+      size = mix(size, glyph.resultTarget.size, resultBlend)
+      let alpha = mix(glyph.source.alpha * .94, glyph.eventTarget.alpha, eventBlend)
+      alpha = mix(alpha, glyph.resultTarget.alpha, resultBlend) * handoff
+      const eventColor = mixColor(spec.tint, glyph.eventTarget.color, eventBlend)
+      const finalColor = mixColor(eventColor, glyph.resultTarget.color, resultBlend)
+      if (activeTarget.text && local > .88) alpha = Math.max(alpha, activeTarget.alpha * .94)
+      if (alpha <= .012) continue
 
-      if (sourceAlpha > .015) {
-        ctx.font = `${mix(glyph.source.size, glyph.eventTarget.size, moveT)}px ${FONT_STACK}`
-        const [r, g, b] = spec.tint
-        ctx.fillStyle = `rgba(${r},${g},${b},${sourceAlpha * .91})`
-        ctx.fillText(glyph.source.char, x, y)
-      }
-      if (eventAlpha > .015) {
-        ctx.font = `${mix(glyph.source.size, glyph.eventTarget.size, moveT)}px ${FONT_STACK}`
-        const [r, g, b] = glyph.eventTarget.color
-        ctx.fillStyle = `rgba(${r},${g},${b},${eventAlpha})`
-        ctx.fillText(glyph.eventTarget.char, x, y)
-      }
-      if (resultAlpha > .015) {
-        ctx.font = `${mix(glyph.eventTarget.size, glyph.resultTarget.size, result)}px ${FONT_STACK}`
-        const [r, g, b] = glyph.resultTarget.color
-        ctx.fillStyle = `rgba(${r},${g},${b},${resultAlpha})`
-        ctx.fillText(glyph.resultTarget.char, x, y)
+      ctx.font = `${size}px ${FONT_STACK}`
+      const eventCharBlend = smooth((local - this.charStartFor(glyph.eventTarget.role)) / .16)
+      if (result <= .001) {
+        this.drawGlyphTransition(glyph.source.char, glyph.eventTarget.char, eventCharBlend, x, y, alpha, finalColor)
+      } else {
+        const eventChar = eventCharBlend >= .5 ? glyph.eventTarget.char : glyph.source.char
+        const resultCharBlend = smooth((result - .40) / .18)
+        this.drawGlyphTransition(eventChar, glyph.resultTarget.char, resultCharBlend, x, y, alpha, finalColor)
       }
     }
+
+    this.drawMorphWave(reveal, result)
+  }
+
+  private charStartFor(role: TargetRole): number {
+    if (role === 'title') return .30
+    if (role === 'summary') return .38
+    if (role === 'meta') return .46
+    if (role === 'action') return .50
+    return .44
+  }
+
+  private drawGlyphTransition(
+    from: string, to: string, blend: number, x: number, y: number,
+    alpha: number, color: [number, number, number],
+  ): void {
+    const [r, g, b] = color
+    if (from === to || blend >= .84) {
+      this.ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`
+      this.ctx.fillText(to, x, y)
+      return
+    }
+    if (blend <= .16) {
+      this.ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`
+      this.ctx.fillText(from, x, y)
+      return
+    }
+    const local = (blend - .16) / .68
+    this.ctx.fillStyle = `rgba(${r},${g},${b},${alpha * (1 - local)})`
+    this.ctx.fillText(from, x, y)
+    this.ctx.fillStyle = `rgba(${r},${g},${b},${alpha * local})`
+    this.ctx.fillText(to, x, y)
+  }
+
+  private drawMorphWave(reveal: number, result: number): void {
+    const visibility = Math.sin(Math.PI * reveal) * (1 - result * .65)
+    if (visibility <= .001) return
+    const waveY = mix(INTERNAL_H * .13, INTERNAL_H * .88, reveal)
+    const gradient = this.ctx.createLinearGradient(0, waveY - INTERNAL_H * .046, 0, waveY + INTERNAL_H * .046)
+    gradient.addColorStop(0, 'rgba(0,0,0,0)')
+    const [r, g, b] = this.event.accent
+    gradient.addColorStop(.5, `rgba(${r},${g},${b},${.047 * visibility})`)
+    gradient.addColorStop(1, 'rgba(0,0,0,0)')
+    this.ctx.fillStyle = gradient
+    this.ctx.fillRect(0, waveY - INTERNAL_H * .046, INTERNAL_W, INTERNAL_H * .092)
   }
 
   private drawAmbientMotion(now: number, reveal: number): void {
@@ -732,6 +955,17 @@ class GlyphLockRenderer {
           const petal = Math.sin(angle * 6 + seconds * .66 + p.phase) * 6.5 * strength
           const scale = 1 + petal / Math.max(180, radius) * .42
           x = focusX + vx * scale; y = focusY + vy * scale
+          break
+        }
+        case 'wave':
+          x += Math.sin(seconds * .52 + p.y * .010 + p.phase) * 5.2 * strength
+          y += Math.sin(seconds * .36 + p.x * .008 - p.phase) * 3.7 * strength
+          break
+        case 'fold': {
+          const depth = (p.y - focusY) / Math.max(1, INTERNAL_H)
+          const fold = Math.sin(seconds * .32 + p.phase) * Math.abs(depth) * 8.5 * strength
+          x += fold * (Math.sin(p.phase) >= 0 ? 1 : -1)
+          y += Math.cos(seconds * .27 + p.phase) * 1.7 * strength
           break
         }
         case 'flow':
@@ -807,7 +1041,7 @@ class GlyphLockRenderer {
     const revealT = smooth(reveal)
     const resultT = smooth(result)
     const motionNow = this.captureMotionMs ?? now
-    const baseAlpha = 1 - smooth(revealT / .38)
+    const baseAlpha = 1 - smooth(revealT / .58)
     if (baseAlpha > .001) {
       const breathing = Math.sin(motionNow / 3600 * this.motionSpec.speed) * .0016 * this.motionSpec.amplitude
       ctx.save()
