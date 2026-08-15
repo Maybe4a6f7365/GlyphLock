@@ -20,6 +20,7 @@ jobs:
       - run: pip install -r scripts/requirements.txt
       - run: python scripts/generate_scene_masks.py
       - run: python scripts/check_morph_first.py
+      - run: python scripts/check_theme_catalog.py
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -42,6 +43,7 @@ jobs:
       - run: pip install -r scripts/requirements.txt
       - run: python scripts/generate_scene_masks.py
       - run: python scripts/check_morph_first.py
+      - run: python scripts/check_theme_catalog.py
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -56,5 +58,5 @@ jobs:
         run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: GlyphLock-semantic-morph-debug-apk
+          name: GlyphLock-aesthetic-design-pack-debug-apk
           path: apps/android/app/build/outputs/apk/debug/app-debug.apk
