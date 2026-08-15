@@ -1,32 +1,60 @@
 package dev.glyphlock.wallpaper;
 
+import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.os.Build;
+import android.os.Process;
 import android.os.SystemClock;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** Full-screen interactive visual proof using only local fixtures. */
 final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
     private final ExperienceController experience = new ExperienceController();
     private final TouchInterpreter touch = new TouchInterpreter(this);
-    private final ExecutorService sceneExecutor = Executors.newSingleThreadExecutor(r -> {
-        Thread thread = new Thread(r, "glyphlock-preview-scene");
+    private final ThreadPoolExecutor sceneExecutor = new ThreadPoolExecutor(
+            1,
+            1,
+            0L,
+            TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(1),
+            r -> {
+        Thread thread = new Thread(() -> {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
+            r.run();
+        }, "glyphlock-preview-scene");
         thread.setDaemon(true);
         return thread;
-    });
+    }, new ThreadPoolExecutor.DiscardOldestPolicy());
     private final AtomicInteger generation = new AtomicInteger();
+    private final BroadcastReceiver notificationReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!NotificationEventStore.ACTION_EVENT_CHANGED.equals(intent.getAction())) return;
+            if (!notificationMode || !isAttachedToWindow()) return;
+            eventRevision = NotificationEventStore.revision(getContext());
+            retargetScene();
+        }
+    };
 
     private GlyphSceneRenderer.Scene scene;
     private DemoCatalog.Theme theme;
     private int eventIndex;
+    private long eventRevision;
+    private boolean notificationMode;
+    private boolean receiverRegistered;
     private boolean initialRevealScheduled;
 
     GlyphPreviewView(Context context) {
@@ -35,6 +63,8 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
         setFocusable(true);
         theme = DemoPreferences.theme(context);
         eventIndex = DemoPreferences.eventIndex(context);
+        eventRevision = DemoPreferences.selectedEventRevision(context);
+        notificationMode = DemoPreferences.notificationEvents(context);
     }
 
     @Override
@@ -47,7 +77,8 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        long now = SystemClock.uptimeMillis();
+        long frameStartedAt = SystemClock.uptimeMillis();
+        long now = frameStartedAt;
         GlyphSceneRenderer.Scene localScene = scene;
         if (localScene == null) {
             drawLoading(canvas, now);
@@ -57,7 +88,10 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
 
         ExperienceController.Frame frame = experience.frame(now);
         GlyphSceneRenderer.draw(canvas, localScene, frame, now, true);
-        if (frame.needsAnimation) postInvalidateDelayed(frame.frameDelayMs);
+        if (frame.needsAnimation) {
+            long renderTime = SystemClock.uptimeMillis() - frameStartedAt;
+            postInvalidateDelayed(Math.max(1L, frame.frameDelayMs - renderTime));
+        }
     }
 
     @Override
@@ -68,6 +102,7 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        registerNotificationReceiver();
         experience.wake(SystemClock.uptimeMillis());
         invalidate();
     }
@@ -76,6 +111,8 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         touch.cancel();
+        generation.incrementAndGet();
+        unregisterNotificationReceiver();
         sceneExecutor.shutdownNow();
         GlyphSceneRenderer.Scene old = scene;
         scene = null;
@@ -87,6 +124,9 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
         long now = SystemClock.uptimeMillis();
         if (experience.state() == ExperienceController.State.AMBIENT) {
             experience.reveal(now);
+        } else if (experience.state() == ExperienceController.State.FOCUSED
+                && !notificationMode) {
+            experience.listen(now);
         } else if (experience.state() == ExperienceController.State.RESULT) {
             experience.collapse(now);
         }
@@ -96,6 +136,11 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
 
     @Override
     public void onLongHold() {
+        if (notificationMode) {
+            experience.reveal(SystemClock.uptimeMillis());
+            invalidate();
+            return;
+        }
         experience.listen(SystemClock.uptimeMillis());
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
         invalidate();
@@ -103,20 +148,20 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
 
     @Override
     public void onNext() {
+        if (notificationMode) return;
         eventIndex = Math.floorMod(eventIndex + 1, DemoCatalog.EVENTS.size());
         DemoPreferences.setEventIndex(getContext(), eventIndex);
-        experience.reveal(SystemClock.uptimeMillis());
         performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-        rebuildScene();
+        retargetScene();
     }
 
     @Override
     public void onPrevious() {
+        if (notificationMode) return;
         eventIndex = Math.floorMod(eventIndex - 1, DemoCatalog.EVENTS.size());
         DemoPreferences.setEventIndex(getContext(), eventIndex);
-        experience.reveal(SystemClock.uptimeMillis());
         performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-        rebuildScene();
+        retargetScene();
     }
 
     @Override
@@ -132,12 +177,19 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
         if (width <= 0 || height <= 0) return;
         final int ticket = generation.incrementAndGet();
         final DemoCatalog.Theme requestedTheme = theme;
-        final DemoCatalog.Event requestedEvent = DemoCatalog.eventAt(eventIndex);
+        final DemoCatalog.Event requestedEvent = DemoPreferences.selectedEvent(getContext());
         final Context appContext = getContext().getApplicationContext();
         sceneExecutor.execute(() -> {
             GlyphSceneRenderer.Scene built;
             try {
-                built = GlyphSceneRenderer.build(appContext, width, height, requestedTheme, requestedEvent);
+                built = GlyphSceneRenderer.build(
+                        appContext,
+                        width,
+                        height,
+                        requestedTheme,
+                        requestedEvent,
+                        RenderQuality.BALANCED
+                );
             } catch (RuntimeException error) {
                 post(() -> drawFailure(error));
                 return;
@@ -150,7 +202,8 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
                 GlyphSceneRenderer.Scene old = scene;
                 scene = built;
                 if (old != null) old.recycle();
-                if (!initialRevealScheduled && DemoPreferences.autoReveal(getContext())) {
+                if (!initialRevealScheduled
+                        && (notificationMode || DemoPreferences.autoReveal(getContext()))) {
                     initialRevealScheduled = true;
                     postDelayed(() -> {
                         experience.reveal(SystemClock.uptimeMillis());
@@ -160,6 +213,71 @@ final class GlyphPreviewView extends View implements TouchInterpreter.Listener {
                 invalidate();
             });
         });
+    }
+
+    private void retargetScene() {
+        final GlyphSceneRenderer.Scene localScene = scene;
+        if (localScene == null) {
+            experience.reveal(SystemClock.uptimeMillis());
+            rebuildScene();
+            return;
+        }
+        final int ticket = generation.incrementAndGet();
+        final DemoCatalog.Event requestedEvent = DemoPreferences.selectedEvent(getContext());
+        final boolean fromResult = experience.state() == ExperienceController.State.RESULT;
+        sceneExecutor.execute(() -> {
+            GlyphSceneRenderer.Retarget retarget;
+            try {
+                retarget = GlyphSceneRenderer.prepareRetarget(
+                        localScene,
+                        requestedEvent,
+                        fromResult
+                );
+            } catch (RuntimeException error) {
+                post(() -> drawFailure(error));
+                return;
+            }
+            post(() -> {
+                if (ticket != generation.get()
+                        || !isAttachedToWindow()
+                        || scene != localScene) {
+                    return;
+                }
+                GlyphSceneRenderer.applyRetarget(localScene, retarget);
+                ExperienceController.State state = experience.state();
+                long now = SystemClock.uptimeMillis();
+                if (state == ExperienceController.State.AMBIENT
+                        || state == ExperienceController.State.COLLAPSING
+                        || state == ExperienceController.State.REVEALING) {
+                    experience.reveal(now);
+                } else {
+                    experience.transitionEvent(now);
+                }
+                invalidate();
+            });
+        });
+    }
+
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private void registerNotificationReceiver() {
+        if (receiverRegistered) return;
+        IntentFilter filter = new IntentFilter(NotificationEventStore.ACTION_EVENT_CHANGED);
+        if (Build.VERSION.SDK_INT >= 33) {
+            getContext().registerReceiver(notificationReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            getContext().registerReceiver(notificationReceiver, filter);
+        }
+        receiverRegistered = true;
+    }
+
+    private void unregisterNotificationReceiver() {
+        if (!receiverRegistered) return;
+        try {
+            getContext().unregisterReceiver(notificationReceiver);
+        } catch (IllegalArgumentException ignored) {
+            // The activity may already have released its receiver context.
+        }
+        receiverRegistered = false;
     }
 
     private void drawFailure(RuntimeException error) {

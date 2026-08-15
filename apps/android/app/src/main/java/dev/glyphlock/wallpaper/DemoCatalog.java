@@ -230,42 +230,42 @@ public final class DemoCatalog {
             new Event(
                     "mail", "IMPORTANT MAIL · 2 MIN AGO", "DESIGN REVIEW MOVED",
                     "Maya moved tomorrow’s review to 09:30. Current travel time leaves a ten-minute conflict.",
-                    "HOLD TO CHECK CALENDAR", "DRAFT READY",
+                    "TAP TO CHECK CALENDAR", "DRAFT READY",
                     "Thursday after 14:00 is clear. A concise reply is prepared for review.",
                     "@<>[]/\\MAYA0930", rgb(159, 221, 238)
             ),
             new Event(
                     "calendar", "CALENDAR · CONFLICT", "FRIDAY COLLISION",
                     "Client review begins at 10:00. Your train arrives at 10:08 and the next free slot is 11:30.",
-                    "HOLD TO FIND A SLOT", "OPTION FOUND",
+                    "TAP TO FIND A SLOT", "OPTION FOUND",
                     "11:30 keeps every attendee and removes the travel risk. Ready to propose.",
                     ":|+−09101130", rgb(213, 204, 166)
             ),
             new Event(
                     "github", "GITHUB · PRODUCTION", "DEPLOYMENT RECOVERED",
                     "The image built successfully. Migration failed after 42 seconds and rollback completed without downtime.",
-                    "HOLD TO SHOW THE CAUSE", "CAUSE ISOLATED",
+                    "TAP TO SHOW THE CAUSE", "CAUSE ISOLATED",
                     "A missing index exceeded the migration window. A safe remediation plan is staged.",
                     "{}[]/#01FAIL42", rgb(186, 178, 238)
             ),
             new Event(
                     "security", "SECURITY · PRIVATE EDGE", "TLS ROTATION DUE",
                     "The edge certificate expires in 36 hours. Two private services still pin the previous chain.",
-                    "HOLD TO STAGE ROTATION", "ROTATION PLAN READY",
+                    "TAP TO STAGE ROTATION", "ROTATION PLAN READY",
                     "The new chain validates everywhere. Two pinned services are isolated for a controlled restart.",
                     "X509TLS256[]{}CERT", rgb(246, 194, 119)
             ),
             new Event(
                     "network", "NETWORK · HOME LAB", "PACKET LOSS CLEARED",
                     "A WireGuard route flap caused 3.8 percent loss for ninety seconds. Traffic is stable again.",
-                    "HOLD TO TRACE THE PATH", "ROUTE IDENTIFIED",
+                    "TAP TO TRACE THE PATH", "ROUTE IDENTIFIED",
                     "An overlapping failover rule created the flap. A deterministic route order is ready.",
                     "TCPIPWG0138:<>/\\", rgb(166, 240, 193)
             ),
             new Event(
                     "model", "MODEL LAB · RUN 18420", "SIMULATION CONVERGED",
                     "The run reached target loss after 18,420 steps. One checkpoint dominates the evaluation set.",
-                    "HOLD TO INSPECT THE RUN", "CHECKPOINT SELECTED",
+                    "TAP TO INSPECT THE RUN", "CHECKPOINT SELECTED",
                     "Step 17,960 has the best stability margin and no regression on the private test slice.",
                     "λψ∇LOSS18420<>01", rgb(196, 178, 255)
             )

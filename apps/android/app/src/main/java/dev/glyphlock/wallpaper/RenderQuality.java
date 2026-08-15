@@ -1,10 +1,10 @@
 package dev.glyphlock.wallpaper;
 
-/** Explicit renderer budgets. Prototype 0 defaults to LUX for visual review. */
+/** Explicit renderer budgets. Live surfaces default to ECO to protect launcher frame time. */
 enum RenderQuality {
-    ECO(540, 12, 520, 980, 0.64f),
-    BALANCED(720, 9, 920, 2050, 0.88f),
-    LUX(960, 7, 1450, 3400, 1.18f);
+    ECO(540, 12, 1200, 3600, 0.72f),
+    BALANCED(720, 9, 1800, 5000, 0.98f),
+    LUX(900, 7, 2400, 6500, 1.16f);
 
     final int maxRenderWidth;
     final int minimumGlyphStep;

@@ -8,6 +8,7 @@ final class DemoPreferences {
     private static final String KEY_THEME = "theme";
     private static final String KEY_EVENT = "event";
     private static final String KEY_AUTO_REVEAL = "auto_reveal";
+    private static final String KEY_NOTIFICATION_EVENTS = "notification_events";
 
     private DemoPreferences() {}
 
@@ -38,6 +39,24 @@ final class DemoPreferences {
 
     static void setAutoReveal(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_AUTO_REVEAL, enabled).apply();
+    }
+
+    static boolean notificationEvents(Context context) {
+        return prefs(context).getBoolean(KEY_NOTIFICATION_EVENTS, false);
+    }
+
+    static void setNotificationEvents(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_NOTIFICATION_EVENTS, enabled).apply();
+    }
+
+    static DemoCatalog.Event selectedEvent(Context context) {
+        if (notificationEvents(context)) return NotificationEventStore.latestEvent(context);
+        return DemoCatalog.eventAt(eventIndex(context));
+    }
+
+    static long selectedEventRevision(Context context) {
+        if (notificationEvents(context)) return NotificationEventStore.revision(context);
+        return -1L - eventIndex(context);
     }
 
     private static SharedPreferences prefs(Context context) {

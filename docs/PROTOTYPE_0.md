@@ -26,7 +26,7 @@ AMBIENT
 REVEALING
   ↓
 FOCUSED
-  ↓ long hold
+  ↓ command-zone tap (preview also supports hold)
 LISTENING
   ↓ local timer
 RESULT TRANSITION
@@ -51,7 +51,9 @@ AMBIENT
 ### Legibility
 
 - Final title can be read immediately at normal phone distance.
-- Summary is limited to approximately four lines.
+- Every title stroke is visibly assembled from multiple source ASCII symbols at close distance.
+- Details are limited to two or three concise signal lines; notification prose is shortened before rendering.
+- A normal title/paragraph/action typography stack is a failed visual gate, even if particles moved into it.
 - Only one event receives full focus.
 - The reading state becomes mostly static.
 - The event can collapse without leaving visual debris.
@@ -67,7 +69,9 @@ AMBIENT
 ### Interaction
 
 - Tap reveals.
-- Long hold reaches listening and result states.
+- A second command-zone tap reaches listening and result states.
+- Long hold is a preview convenience, never the only live-wallpaper interaction path.
+- Wallpaper hosts may own long press; the engine also accepts the standard wallpaper-host tap command.
 - Left/right changes event.
 - Up collapses.
 - Preview and wallpaper use the same semantic interaction model.
@@ -80,7 +84,7 @@ Ask reviewers only these questions:
 
 1. Would you keep the resting artwork as a wallpaper?
 2. Did the artwork transform, or did a UI panel appear?
-3. What changed in the event?
+3. Could you read the event while still seeing that its strokes were made from ASCII material?
 4. Did the motion help you understand urgency?
 5. Did any part feel noisy, cheap, or terminal-like?
 

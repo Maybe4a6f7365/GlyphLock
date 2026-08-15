@@ -8,13 +8,17 @@ WEB = ROOT / "apps/visual-lab/src/main.ts"
 CATALOG = ROOT / "apps/android/app/src/main/java/dev/glyphlock/wallpaper/DemoCatalog.java"
 
 FORBIDDEN = {
-    ANDROID: ("cavityFraction", "protectedArea", "readableBounds", "renderEventBitmap"),
+    ANDROID: (
+        "cavityFraction", "protectedArea", "readableBounds", "renderEventBitmap",
+        "addSemanticStructure(targets",
+    ),
     WEB: ("cavityY", "protectedArea", "readableBounds", "eventCanvas", "textMaskCanvas"),
 }
 REQUIRED = {
     ANDROID: (
         "CompositionStyle", "TextBand", "TargetRole", "warpFillerAroundBands",
-        "addSemanticStructure", "addArcLineTargets", "identityFloorFor",
+        "addFullScreenEventStructure", "addStructureArc", "clearStructureFromTextBands",
+        "identityFloorFor", "SystemIntent", "transformationOrder",
     ),
     WEB: (
         "CompositionStyle", "TextBand", "TargetRole", "warpFillerAroundBands",

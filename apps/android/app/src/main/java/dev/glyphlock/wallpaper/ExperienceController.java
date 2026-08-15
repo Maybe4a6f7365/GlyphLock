@@ -6,6 +6,7 @@ final class ExperienceController {
         AMBIENT,
         REVEALING,
         FOCUSED,
+        EVENT_TRANSITION,
         LISTENING,
         RESULT_TRANSITION,
         RESULT,
@@ -14,6 +15,7 @@ final class ExperienceController {
 
     static final class Frame {
         final float revealProgress;
+        final float eventProgress;
         final float resultProgress;
         final float wakeProgress;
         final boolean listening;
@@ -23,6 +25,7 @@ final class ExperienceController {
 
         Frame(
                 float revealProgress,
+                float eventProgress,
                 float resultProgress,
                 float wakeProgress,
                 boolean listening,
@@ -31,6 +34,7 @@ final class ExperienceController {
                 State state
         ) {
             this.revealProgress = revealProgress;
+            this.eventProgress = eventProgress;
             this.resultProgress = resultProgress;
             this.wakeProgress = wakeProgress;
             this.listening = listening;
@@ -57,6 +61,12 @@ final class ExperienceController {
         stateStartedAtMs = nowMs;
     }
 
+    /** Morphs the resolved semantic topology directly into a newly compiled event. */
+    void transitionEvent(long nowMs) {
+        state = State.EVENT_TRANSITION;
+        stateStartedAtMs = nowMs;
+    }
+
     void collapse(long nowMs) {
         if (state == State.AMBIENT) return;
         state = State.COLLAPSING;
@@ -75,9 +85,11 @@ final class ExperienceController {
 
     Frame frame(long nowMs) {
         float reveal = 0f;
+        float event = 1f;
         float result = 0f;
         boolean listening = false;
         boolean transition = false;
+        boolean operationalMotion = false;
 
         switch (state) {
             case AMBIENT:
@@ -87,12 +99,28 @@ final class ExperienceController {
                 float raw = (nowMs - stateStartedAtMs) / 2450f;
                 reveal = GlyphMath.clamp01(raw);
                 transition = reveal < 1f;
-                if (!transition) state = State.FOCUSED;
+                if (!transition) {
+                    state = State.FOCUSED;
+                    stateStartedAtMs = nowMs;
+                    operationalMotion = true;
+                }
                 break;
             }
             case FOCUSED:
                 reveal = 1f;
+                operationalMotion = nowMs - stateStartedAtMs < 6200L;
                 break;
+            case EVENT_TRANSITION: {
+                reveal = 1f;
+                event = GlyphMath.clamp01((nowMs - stateStartedAtMs) / 1500f);
+                transition = event < 1f;
+                if (!transition) {
+                    state = State.FOCUSED;
+                    stateStartedAtMs = nowMs;
+                    operationalMotion = true;
+                }
+                break;
+            }
             case LISTENING: {
                 reveal = 1f;
                 listening = true;
@@ -108,12 +136,17 @@ final class ExperienceController {
                 reveal = 1f;
                 result = GlyphMath.clamp01((nowMs - stateStartedAtMs) / 1350f);
                 transition = result < 1f;
-                if (!transition) state = State.RESULT;
+                if (!transition) {
+                    state = State.RESULT;
+                    stateStartedAtMs = nowMs;
+                    operationalMotion = true;
+                }
                 break;
             }
             case RESULT:
                 reveal = 1f;
                 result = 1f;
+                operationalMotion = nowMs - stateStartedAtMs < 6200L;
                 break;
             case COLLAPSING: {
                 reveal = 1f - GlyphMath.clamp01((nowMs - stateStartedAtMs) / 1900f);
@@ -127,23 +160,21 @@ final class ExperienceController {
                 ? 1f
                 : GlyphMath.clamp01((nowMs - wakeStartedAtMs) / 2200f);
         boolean wakeAnimating = wake < 1f;
-        boolean animate = transition
-                || listening
-                || wakeAnimating
-                || state == State.AMBIENT
-                || state == State.FOCUSED
-                || state == State.RESULT;
+        // Stable wallpaper states are deliberately static. A perpetual redraw loop competes
+        // with the launcher and lock screen even when the user cannot perceive useful motion.
+        boolean animate = transition || listening || wakeAnimating || operationalMotion;
         int delay;
         if (transition || listening || wakeAnimating) {
-            delay = 16;
-        } else if (state == State.AMBIENT) {
-            delay = 42; // 24 fps preserves life without paying for an idle 60 fps loop.
+            delay = 33; // A consistent 30 fps transition budget is smooth and battery-safe.
+        } else if (operationalMotion) {
+            delay = 66; // Brief 15 fps system-life tail; stable text never moves.
         } else {
-            delay = 66; // Reading states retain a barely perceptible field drift at ~15 fps.
+            delay = 1000; // Not scheduled while needsAnimation is false.
         }
 
         return new Frame(
                 GlyphMath.smooth(reveal),
+                GlyphMath.smooth(event),
                 GlyphMath.smooth(result),
                 GlyphMath.smooth(wake),
                 listening,

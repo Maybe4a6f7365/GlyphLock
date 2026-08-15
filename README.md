@@ -1,10 +1,10 @@
-# GlyphLock — v0.8 Signature Systems
+# GlyphLock — v0.9 Intentional AI Systems
 
 GlyphLock is an Android live-wallpaper experiment in which high-density glyph artwork stays alive and then **reorganizes its own source topology into useful event language**.
 
 The wallpaper is the interface. There is no event card, black information panel, independent event bitmap, chatbot window, avatar, or assistant orb.
 
-> **Prototype boundary:** this repository intentionally contains no Hermes integration, connectors, network client, microphone permission, notification-listener permission, or account permission. All events are deterministic local fixtures until the wallpaper passes the visual gate.
+> **Prototype boundary:** this repository contains an opt-in, on-device Android notification listener, but no Hermes integration, connectors, network client, microphone permission, account permission, or internet permission. Demo fixtures remain available without notification access.
 
 ## Product invariant
 
@@ -24,11 +24,32 @@ THE SAME AMBIENT GLYPH ART
 
 An event is valid only when its title, summary, metadata, action hint, and surrounding technical structure are assembled from the wallpaper’s existing glyph material.
 
-## What v0.8 improves
+“Assembled” does **not** mean moving one particle into each ordinary text character. A focused
+frame must remain unmistakably ASCII art: many retained source symbols form each readable
+macro-letter or signal stroke. A title/paragraph/action typography stack is a rejected regression,
+even if it was produced by the morph list. See the
+[non-negotiable visual test](docs/MORPH_FIRST_ARCHITECTURE.md#non-negotiable-visual-test).
 
-Version 0.7 established real semantic compositions, but source-to-target assignment still scanned every source for every destination. That was expensive and sometimes let adjacent letters recruit glyphs from opposite sides of the artwork, causing crossing paths.
+## What v0.9 improves
 
-Version 0.8 adds:
+Earlier passes established real semantic compositions and coherent transport, but too many themes
+still read as central abstract particle studies. Version 0.9 makes full-screen system identity,
+readability, and purposeful choreography explicit requirements.
+
+Version 0.9 adds:
+
+- **Full-screen ASCII systems:** source and focused topology reaches the physical screen edges and
+  corners while preserving clock and gesture safe zones.
+- **Operational identities:** defense, reactor, navigation, network, biometric, vault, temporal,
+  sensor, and analysis geometries each communicate a recognizable AI-system job.
+- **Intentional choreography:** acquisition, ignition, routing, unlocking, scanning, and analysis
+  determine particle order; random movement no longer substitutes for meaning.
+- **No semantic outlines:** supporting hardware is composed in screen space, never from event text
+  bounds, and is cleared only from exact macro-letter strokes.
+- **Unclipped event copy:** adaptive multi-line fitting preserves accepted notification content and
+  breaks long tokens instead of silently dropping a tail.
+- **Readable semantic density:** filled macro-letter stroke cells and a quiet source imprint improve
+  recognition without drawing a conventional text layer.
 
 - **Grid-assisted coherent transport:** nearby event characters recruit nearby source glyphs first.
 - **Line-order protection:** neighboring characters resist source-order inversions, reducing tangled motion.
@@ -52,7 +73,9 @@ Version 0.8 adds:
 8. **Cascade** — language descends through stepped rails and vector telemetry.
 9. **Constellation** — semantic lines occupy related nodes inside a connected field.
 
-Readability is created by **local text-band warping**. Only glyphs that collide with an exact line of language are moved aside. The renderer does not evacuate a global rectangle around the event.
+Readability is created by **ASCII macro-glyph topology and local stroke warping**. Only glyphs that
+collide with exact semantic strokes are moved aside. The renderer does not typeset ordinary copy or
+evacuate a global rectangle around the event.
 
 ## Wallpaper systems
 
@@ -97,12 +120,12 @@ When an event is revealed:
 
 1. A wake pulse travels through the ambient field.
 2. The dense raster hands off gradually to persistent source glyphs.
-3. The spatial matcher assigns nearby high-value glyphs to event characters.
+3. The spatial matcher assigns nearby high-value glyphs to macro-letter stroke cells.
 4. Remaining source glyphs deform according to the theme grammar and identity floor.
 5. Exact text lines locally repel colliding filler glyphs.
 6. Theme-specific technical structures form from the same source material.
-7. Characters change late in the path, making the artwork-to-language transformation legible.
-8. Settled text becomes calm while non-text structure retains restrained life.
+7. Source symbols remain visible while their collective arrangement becomes readable language.
+8. Settled semantic strokes become calm while surrounding structure retains restrained life.
 9. Holding the interaction area sends a pressure wave through the same topology.
 10. Collapse reverses the glyphs toward their original source coordinates.
 
@@ -118,12 +141,27 @@ When an event is revealed:
 ## Android interaction
 
 - **Wallpaper visible:** wake ripple; optional auto-reveal of the selected fixture.
-- **Tap lower area:** reveal/focus the selected event.
-- **Hold lower area:** enter the local listening deformation, then show a simulated result.
+- **Tap lower area:** reveal/focus the selected event; tap again to enter the local listening deformation and simulated result.
+- **Hold lower area in preview:** optional equivalent of the second tap.
 - **Swipe left/right:** move between fixture events.
 - **Swipe up:** reverse the topology into ambient art.
 
-Wallpaper touch delivery varies by launcher and OEM. The full-screen preview remains the deterministic evaluation surface.
+Wallpaper touch delivery varies by launcher and OEM. The live engine accepts both raw tap events and
+the standard wallpaper-host tap command; long press is not required because Xiaomi and other hosts
+may reserve it for wallpaper customization. The full-screen preview remains the deterministic
+evaluation surface.
+
+## Phone notification events
+
+Phone events are strictly opt-in. Turn on **Use phone notifications as wallpaper events**, approve
+**GlyphLock notification events** on the component-specific Android access screen, and return to the
+app. Notification mode is enabled only after Android confirms access; GlyphLock then requests a
+fresh listener binding and immediately transforms the newest visible event. If the OEM disconnects
+the listener, the service requests a rebind and the control screen exposes a manual reconnect action.
+
+Only the newest event is retained locally. Turning notification mode off stops event extraction even
+if Android's access grant remains in place; the grant itself can be revoked from system settings at
+any time.
 
 ## Repository layout
 
@@ -206,10 +244,12 @@ Hermes remains deferred until all are true:
 4. Neighboring letters recruit neighboring source glyphs without obvious crossing.
 5. Removing transformed source glyphs would remove the event itself.
 6. No event bitmap, card, background panel, or global empty rectangle is rendered.
-7. Collapse reverses the topology rather than crossfading to another composition.
-8. Lux mode is smooth and thermally acceptable on the target Android device.
-9. Hidden wallpaper stops frame scheduling.
-10. At least three systems are strong enough to use daily before any AI is connected.
+7. Every readable stroke remains visibly built from multiple source ASCII symbols; no ordinary typography stack appears.
+8. A newer event retargets the same settled particles instead of rebuilding or crossfading the scene.
+9. Collapse reverses the topology rather than crossfading to another composition.
+10. Lux mode is smooth and thermally acceptable on the target Android device.
+11. Hidden wallpaper stops frame scheduling.
+12. At least three systems are strong enough to use daily before any AI is connected.
 
 See:
 

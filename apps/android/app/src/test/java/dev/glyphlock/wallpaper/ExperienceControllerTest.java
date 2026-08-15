@@ -35,19 +35,45 @@ public class ExperienceControllerTest {
         assertEquals(ExperienceController.State.AMBIENT, complete.state);
         assertEquals(0f, complete.revealProgress, 0.0001f);
     }
+
     @Test
-    public void frameBudgetDropsOutsideTransitions() {
+    public void aNewEventMorphsWithoutReturningToAmbient() {
+        ExperienceController controller = new ExperienceController();
+        controller.reveal(0L);
+        controller.frame(3_000L);
+        controller.transitionEvent(4_000L);
+
+        ExperienceController.Frame start = controller.frame(4_000L);
+        ExperienceController.Frame middle = controller.frame(4_750L);
+        ExperienceController.Frame complete = controller.frame(5_600L);
+
+        assertEquals(1f, start.revealProgress, 0.0001f);
+        assertEquals(0f, start.eventProgress, 0.0001f);
+        assertTrue(middle.eventProgress > 0f && middle.eventProgress < 1f);
+        assertEquals(1f, complete.eventProgress, 0.0001f);
+        assertEquals(ExperienceController.State.FOCUSED, complete.state);
+    }
+
+    @Test
+    public void frameBudgetDropsAfterBriefOperationalTail() {
         ExperienceController controller = new ExperienceController();
         ExperienceController.Frame ambient = controller.frame(10_000L);
-        assertEquals(42, ambient.frameDelayMs);
+        assertEquals(1000, ambient.frameDelayMs);
+        assertTrue(!ambient.needsAnimation);
 
         controller.reveal(10_000L);
         ExperienceController.Frame revealing = controller.frame(10_300L);
-        assertEquals(16, revealing.frameDelayMs);
+        assertEquals(33, revealing.frameDelayMs);
+        assertTrue(revealing.needsAnimation);
 
         controller.frame(13_000L);
-        ExperienceController.Frame focused = controller.frame(13_100L);
-        assertEquals(66, focused.frameDelayMs);
+        ExperienceController.Frame settling = controller.frame(13_100L);
+        assertEquals(66, settling.frameDelayMs);
+        assertTrue(settling.needsAnimation);
+
+        ExperienceController.Frame focused = controller.frame(19_301L);
+        assertEquals(1000, focused.frameDelayMs);
+        assertTrue(!focused.needsAnimation);
     }
 
 }
