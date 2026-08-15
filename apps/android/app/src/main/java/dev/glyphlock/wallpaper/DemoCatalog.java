@@ -35,7 +35,10 @@ public final class DemoCatalog {
         ORBITAL_BAND,
         ARCHITECTURE,
         SPLICE,
-        FIELD
+        FIELD,
+        DIAL,
+        CASCADE,
+        CONSTELLATION
     }
 
     public enum Theme {
@@ -118,6 +121,26 @@ public final class DemoCatalog {
                 "Recursive Monolith", R.drawable.scene_recursive_monolith, 0.54f, 0.58f,
                 ".:;|+-=[]{}<>01∞", 1.23f, rgb(221, 205, 255), 0.50f, 0.38f,
                 MotionStyle.FOLD, CompositionStyle.ARCHITECTURE, 1.10f
+        ),
+        CHRONO_LOOM(
+                "Chrono Loom", R.drawable.scene_chrono_loom, 0.54f, 0.70f,
+                ".:;|()[]<>Δtτ0123456789", 1.24f, rgb(255, 208, 132), 0.50f, 0.37f,
+                MotionStyle.ORBITAL, CompositionStyle.DIAL, 1.15f
+        ),
+        MUON_CHAMBER(
+                "Muon Chamber", R.drawable.scene_muon_chamber, 0.54f, 0.70f,
+                ".:;~μνπτ01()[]<>+*", 1.22f, rgb(184, 174, 255), 0.50f, 0.39f,
+                MotionStyle.RADIAL, CompositionStyle.DIAL, 1.18f
+        ),
+        VECTOR_SHRINE(
+                "Vector Shrine", R.drawable.scene_vector_shrine, 0.53f, 0.62f,
+                ".:;|/\\+-=[]{}<>XYZ01", 1.23f, rgb(125, 232, 245), 0.50f, 0.40f,
+                MotionStyle.CIRCUIT, CompositionStyle.CASCADE, 1.03f
+        ),
+        LAGRANGE_GARDEN(
+                "Lagrange Garden", R.drawable.scene_lagrange_garden, 0.55f, 0.72f,
+                ".:;~L12345Ωλ01()<>*+", 1.20f, rgb(171, 238, 177), 0.50f, 0.38f,
+                MotionStyle.BLOOM, CompositionStyle.CONSTELLATION, 1.08f
         );
 
         public final String label;

@@ -12,9 +12,19 @@ FORBIDDEN = {
     WEB: ("cavityY", "protectedArea", "readableBounds", "eventCanvas", "textMaskCanvas"),
 }
 REQUIRED = {
-    ANDROID: ("CompositionStyle", "TextBand", "TargetRole", "warpFillerAroundBands", "addSemanticStructure"),
-    WEB: ("CompositionStyle", "TextBand", "TargetRole", "warpFillerAroundBands", "addSemanticStructure"),
-    CATALOG: ("SPECTRAL_OBSERVATORY", "RECURSIVE_MONOLITH", "semanticWidth", "compositionStyle"),
+    ANDROID: (
+        "CompositionStyle", "TextBand", "TargetRole", "warpFillerAroundBands",
+        "addSemanticStructure", "addArcLineTargets", "identityFloorFor",
+    ),
+    WEB: (
+        "CompositionStyle", "TextBand", "TargetRole", "warpFillerAroundBands",
+        "addSemanticStructure", "addArcLineTargets", "identityFloorFor",
+    ),
+    CATALOG: (
+        "SPECTRAL_OBSERVATORY", "RECURSIVE_MONOLITH", "CHRONO_LOOM",
+        "MUON_CHAMBER", "VECTOR_SHRINE", "LAGRANGE_GARDEN",
+        "semanticWidth", "compositionStyle", "DIAL", "CASCADE", "CONSTELLATION",
+    ),
 }
 
 errors: list[str] = []

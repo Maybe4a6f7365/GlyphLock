@@ -10,8 +10,8 @@ android {
         applicationId = "dev.glyphlock.wallpaper"
         minSdk = 28
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.7.0-semantic-compositions"
+        versionCode = 8
+        versionName = "0.8.0-signature-systems"
 
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
     }

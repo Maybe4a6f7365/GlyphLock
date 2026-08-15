@@ -1,6 +1,6 @@
-# GlyphLock — v0.7 Semantic Compositions
+# GlyphLock — v0.8 Signature Systems
 
-GlyphLock is an Android live-wallpaper experiment in which a high-density glyph artwork continuously moves and then **reorganizes its own glyph topology into useful event language**.
+GlyphLock is an Android live-wallpaper experiment in which high-density glyph artwork stays alive and then **reorganizes its own source topology into useful event language**.
 
 The wallpaper is the interface. There is no event card, black information panel, independent event bitmap, chatbot window, avatar, or assistant orb.
 
@@ -13,60 +13,77 @@ AMBIENT GLYPH ART
         ↓
 PERSISTENT SOURCE GLYPHS
         ↓
-THEME-SPECIFIC SEMANTIC COMPOSITION
+COHERENT LOCAL TRANSPORT
         ↓
-EVENT LANGUAGE + TRANSFORMED ART STRUCTURE
+THEME-SPECIFIC SEMANTIC TOPOLOGY
         ↓
-RESULT LANGUAGE
+RESULT TOPOLOGY
         ↓
 THE SAME AMBIENT GLYPH ART
 ```
 
-An event is valid only when its title, summary, metadata, action hint, and surrounding technical structure are all assembled from the wallpaper’s existing glyph material.
+An event is valid only when its title, summary, metadata, action hint, and surrounding technical structure are assembled from the wallpaper’s existing glyph material.
 
-## What v0.7 fixes
+## What v0.8 improves
 
-The v0.6 catalogue was broad, but the final event state still reused one generic information composition. Some themes therefore lost their identity and could look like text floating in a large cleared region.
+Version 0.7 established real semantic compositions, but source-to-target assignment still scanned every source for every destination. That was expensive and sometimes let adjacent letters recruit glyphs from opposite sides of the artwork, causing crossing paths.
 
-Version 0.7 introduces **semantic composition grammars**:
+Version 0.8 adds:
 
-- **Figure:** language inhabits a sculptural body while bilateral contours remain visible.
-- **Core:** event text phase-locks inside concentric technical rings.
-- **Orbital band:** language becomes the stable center of two active orbital structures.
-- **Architecture:** text aligns with asymmetric rails and recursive technical framing.
-- **Splice:** language forms between two interwoven signal strands.
-- **Field:** metadata, title, summary, and action settle at different phases of a wave field.
+- **Grid-assisted coherent transport:** nearby event characters recruit nearby source glyphs first.
+- **Line-order protection:** neighboring characters resist source-order inversions, reducing tangled motion.
+- **Long-travel penalties:** the solver avoids visually implausible cross-screen movement.
+- **Identity floors:** deformation is strongest near semantic content and restrained elsewhere, keeping the wallpaper recognizable at full reveal.
+- **Transport echoes:** faint source-glyph afterimages expose the path from artwork into language without introducing a second layer.
+- **Adaptive frame budgets:** transitions update at 16 ms, ambient life at 42 ms, and settled reading states at 66 ms.
+- **Parallel procedural generation:** selective and incremental mask generation dramatically shortens the design loop.
+- **Three new composition grammars:** dial, cascade, and constellation.
+- **Four new signature systems:** Chrono Loom, Muon Chamber, Vector Shrine, and Lagrange Garden.
 
-Readability is now created by **local text-band warping**. Only glyphs that collide with an exact line of language are moved aside. The renderer no longer evacuates a single global rectangle around the event.
+## Semantic composition grammars
 
-The character transition is staged by semantic role: title first, then summary, metadata, action, and supporting structure. This prevents the whole event from becoming an unreadable crossfade at once.
+1. **Figure** — language inhabits a sculptural body while bilateral contours remain visible.
+2. **Core** — event text phase-locks inside concentric technical rings.
+3. **Orbital band** — language becomes the stable center of active orbital structures.
+4. **Architecture** — text aligns with asymmetric rails and recursive framing.
+5. **Splice** — language forms between interwoven signal strands.
+6. **Field** — semantic roles settle at different phases of a wave field.
+7. **Dial** — metadata and actions become calibrated arcs around a central reading.
+8. **Cascade** — language descends through stepped rails and vector telemetry.
+9. **Constellation** — semantic lines occupy related nodes inside a connected field.
+
+Readability is created by **local text-band warping**. Only glyphs that collide with an exact line of language are moved aside. The renderer does not evacuate a global rectangle around the event.
 
 ## Wallpaper systems
 
-The catalogue contains sixteen original procedural systems:
+The catalogue contains twenty original procedural systems:
 
-1. **Sentinel** — winged situational-awareness figure.
-2. **Moth** — symmetric organic collision field.
-3. **Orbit** — topographic systems ring.
-4. **Neural Halo** — synaptic graph and cognition core.
-5. **Cipher Cathedral** — cyber-reliquary and circuit architecture.
-6. **Quantum Lattice** — probability grid and wave shells.
-7. **Fusion Core** — reactor telemetry form.
-8. **Packet Bloom** — radial routing flower.
-9. **Event Horizon** — lensing field, accretion lanes, and jets.
-10. **Tesseract Engine** — projected higher-dimensional frames.
-11. **Helix Array** — genomic double-helix telemetry.
-12. **Interference Field** — phase-locked moiré waves.
-13. **Cryo Vault** — archival chamber and cold-memory vial.
-14. **Dyson Relay** — stellar collector and receiver architecture.
-15. **Spectral Observatory** — radio dish, phase fronts, and spectrum waterfall.
-16. **Recursive Monolith** — nested impossible architecture and semantic aperture.
+1. Sentinel
+2. Moth
+3. Orbit
+4. Neural Halo
+5. Cipher Cathedral
+6. Quantum Lattice
+7. Fusion Core
+8. Packet Bloom
+9. Event Horizon
+10. Tesseract Engine
+11. Helix Array
+12. Interference Field
+13. Cryo Vault
+14. Dyson Relay
+15. Spectral Observatory
+16. Recursive Monolith
+17. **Chrono Loom** — chronograph rings, pendulum traces, and timing rails.
+18. **Muon Chamber** — collision tracks and concentric detector walls.
+19. **Vector Shrine** — recursive perspective frames and stepped telemetry.
+20. **Lagrange Garden** — stable orbital nodes and living transfer trajectories.
 
-The procedural masks are generated by `scripts/generate_scene_masks.py`; generated PNGs are not committed as opaque source assets.
+Generated PNG masks are not committed as opaque source assets. They are recreated from `scripts/generate_scene_masks.py`.
 
 ## Motion system
 
-The resting wallpaper remains alive through a bounded moving subset while the dense raster preserves detail. Seven path grammars are implemented:
+Seven path grammars are implemented:
 
 - flow
 - orbital
@@ -80,14 +97,14 @@ When an event is revealed:
 
 1. A wake pulse travels through the ambient field.
 2. The dense raster hands off gradually to persistent source glyphs.
-3. High-value source glyphs are spatially assigned to event characters.
-4. Remaining source glyphs deform according to the theme grammar.
+3. The spatial matcher assigns nearby high-value glyphs to event characters.
+4. Remaining source glyphs deform according to the theme grammar and identity floor.
 5. Exact text lines locally repel colliding filler glyphs.
-6. Theme-specific structure forms around the language.
-7. Text settles while decorative glyphs retain restrained motion.
-8. Holding the interaction area sends a pressure wave through the same topology.
-9. The simulated result reorganizes those glyphs again.
-10. Collapse reverses them toward their original source coordinates.
+6. Theme-specific technical structures form from the same source material.
+7. Characters change late in the path, making the artwork-to-language transformation legible.
+8. Settled text becomes calm while non-text structure retains restrained life.
+9. Holding the interaction area sends a pressure wave through the same topology.
+10. Collapse reverses the glyphs toward their original source coordinates.
 
 ## Local demo events
 
@@ -106,7 +123,7 @@ When an event is revealed:
 - **Swipe left/right:** move between fixture events.
 - **Swipe up:** reverse the topology into ambient art.
 
-Wallpaper touch delivery varies by launcher and OEM. The full-screen preview is the deterministic evaluation surface; the live wallpaper uses the same best-effort gestures.
+Wallpaper touch delivery varies by launcher and OEM. The full-screen preview remains the deterministic evaluation surface.
 
 ## Repository layout
 
@@ -114,7 +131,7 @@ Wallpaper touch delivery varies by launcher and OEM. The full-screen preview is 
 apps/android/       Android live wallpaper, preview, and renderer
 apps/visual-lab/    TypeScript/Canvas visual laboratory
 scripts/            Procedural art, guards, capture, and review tooling
-docs/               Architecture, grammar, review, and acceptance gates
+docs/               Architecture, grammar, reviews, and acceptance gates
 .github/workflows/  Reproducible visual-lab and Android builds
 ```
 
@@ -122,9 +139,10 @@ docs/               Architecture, grammar, review, and acceptance gates
 
 ```bash
 python -m pip install -r scripts/requirements.txt
-python scripts/generate_scene_masks.py
+python scripts/generate_scene_masks.py --jobs 3
 python scripts/check_morph_first.py
 python scripts/check_semantic_composition.py
+python scripts/check_transport_integrity.py
 python scripts/check_theme_catalog.py
 cd apps/visual-lab
 npm install
@@ -132,7 +150,13 @@ npm run build
 npm run serve
 ```
 
-Open `http://localhost:4173`.
+Generate only selected systems during design work:
+
+```bash
+python scripts/generate_scene_masks.py \
+  --only chrono_loom,muon_chamber,vector_shrine,lagrange_garden \
+  --jobs 2 --compress-level 4
+```
 
 ## Build Android
 
@@ -144,7 +168,7 @@ Requirements:
 
 ```bash
 python -m pip install -r scripts/requirements.txt
-python scripts/generate_scene_masks.py
+python scripts/generate_scene_masks.py --jobs 3
 cd apps/android
 gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
@@ -162,17 +186,15 @@ CI rejects:
 - independent event/result bitmaps or canvases;
 - event-card renderers;
 - global protected rectangles or cavity coordinates;
+- naive quadratic source-to-target assignment;
+- missing identity-preservation and transport primitives;
 - Android/browser/generator catalogue drift;
-- fewer than sixteen aligned procedural systems;
-- missing semantic composition primitives;
+- fewer than twenty aligned procedural systems;
+- fewer than nine semantic composition grammars;
 - Android unit, lint, or build failures;
 - TypeScript build failures.
 
-CI also publishes:
-
-- the visual laboratory;
-- an installable debug APK;
-- a contact sheet of all procedural systems.
+CI publishes the visual laboratory, installable debug APK, build diagnostics, and a contact sheet of all procedural systems.
 
 ## Morph-first acceptance gate
 
@@ -181,18 +203,19 @@ Hermes remains deferred until all are true:
 1. Ambient art is desirable with events disabled.
 2. The user can visibly follow the artwork becoming the event.
 3. The final event retains the selected theme’s visual identity.
-4. Removing transformed source glyphs would remove the event itself.
-5. No event bitmap, card, background panel, or global empty rectangle is rendered.
-6. The title is readable immediately after settling.
+4. Neighboring letters recruit neighboring source glyphs without obvious crossing.
+5. Removing transformed source glyphs would remove the event itself.
+6. No event bitmap, card, background panel, or global empty rectangle is rendered.
 7. Collapse reverses the topology rather than crossfading to another composition.
 8. Lux mode is smooth and thermally acceptable on the target Android device.
 9. Hidden wallpaper stops frame scheduling.
-10. At least three themes are strong enough to use daily before any AI is connected.
+10. At least three systems are strong enough to use daily before any AI is connected.
 
 See:
 
-- [Repository review v0.7](docs/REPO_REVIEW_V07.md)
-- [Semantic compositions](docs/SEMANTIC_COMPOSITIONS_V07.md)
+- [Repository review v0.8](docs/REPO_REVIEW_V08.md)
+- [Signature systems v0.8](docs/SIGNATURE_SYSTEMS_V08.md)
+- [Semantic compositions v0.7](docs/SEMANTIC_COMPOSITIONS_V07.md)
 - [Morph-first architecture](docs/MORPH_FIRST_ARCHITECTURE.md)
 - [Prototype visual gate](docs/PROTOTYPE_0.md)
 - [Hermes deferred boundary](docs/HERMES_DEFERRED.md)

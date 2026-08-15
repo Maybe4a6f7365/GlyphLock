@@ -33,3 +33,7 @@ apps/android/app/src/main/res/drawable/wallpaper_thumbnail.png
 apps/visual-lab/dist/
 build/review/
 review/
+
+# Python
+__pycache__/
+*.py[cod]

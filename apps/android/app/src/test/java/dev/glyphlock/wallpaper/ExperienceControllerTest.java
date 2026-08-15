@@ -35,4 +35,19 @@ public class ExperienceControllerTest {
         assertEquals(ExperienceController.State.AMBIENT, complete.state);
         assertEquals(0f, complete.revealProgress, 0.0001f);
     }
+    @Test
+    public void frameBudgetDropsOutsideTransitions() {
+        ExperienceController controller = new ExperienceController();
+        ExperienceController.Frame ambient = controller.frame(10_000L);
+        assertEquals(42, ambient.frameDelayMs);
+
+        controller.reveal(10_000L);
+        ExperienceController.Frame revealing = controller.frame(10_300L);
+        assertEquals(16, revealing.frameDelayMs);
+
+        controller.frame(13_000L);
+        ExperienceController.Frame focused = controller.frame(13_100L);
+        assertEquals(66, focused.frameDelayMs);
+    }
+
 }

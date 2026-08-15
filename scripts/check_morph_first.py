@@ -12,25 +12,28 @@ FORBIDDEN = {
         "resultBitmap",
         "renderEventBitmap",
         "drawListening(",
+        "assignNearestTargets",
     ),
     WEB: (
         "eventCanvas",
         "textMaskCanvas",
         "drawImage(this.eventCanvas",
         "private drawListening(",
+        "assignNearestTargets",
     ),
 }
 
 REQUIRED = {
     ANDROID: (
         "class MorphGlyph",
-        "assignNearestTargets",
+        "assignCoherentTargets",
         "buildFillerTarget",
         "drawMorphField",
+        "SpatialGlyphMatcher.match",
     ),
     WEB: (
         "interface MorphGlyph",
-        "assignNearestTargets",
+        "assignCoherentTargets",
         "buildFillerTarget",
         "drawMorphField",
     ),
@@ -41,7 +44,7 @@ for path, tokens in FORBIDDEN.items():
     text = path.read_text(encoding="utf-8")
     for token in tokens:
         if token in text:
-            errors.append(f"{path.relative_to(ROOT)} contains forbidden overlay token: {token}")
+            errors.append(f"{path.relative_to(ROOT)} contains forbidden overlay/naive token: {token}")
 for path, tokens in REQUIRED.items():
     text = path.read_text(encoding="utf-8")
     for token in tokens:

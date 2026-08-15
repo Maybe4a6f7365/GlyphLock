@@ -133,7 +133,14 @@ final class ExperienceController {
                 || state == State.AMBIENT
                 || state == State.FOCUSED
                 || state == State.RESULT;
-        int delay = transition || listening || wakeAnimating ? 16 : 33;
+        int delay;
+        if (transition || listening || wakeAnimating) {
+            delay = 16;
+        } else if (state == State.AMBIENT) {
+            delay = 42; // 24 fps preserves life without paying for an idle 60 fps loop.
+        } else {
+            delay = 66; // Reading states retain a barely perceptible field drift at ~15 fps.
+        }
 
         return new Frame(
                 GlyphMath.smooth(reveal),
