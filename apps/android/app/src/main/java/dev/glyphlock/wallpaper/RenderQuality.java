@@ -1,10 +1,10 @@
 package dev.glyphlock.wallpaper;
 
-/** Explicit renderer budgets. Prototype 0 defaults to LUX for design review. */
+/** Explicit renderer budgets. Prototype 0 defaults to LUX for visual review. */
 enum RenderQuality {
-    ECO(540, 12, 420, 760, 0.60f),
-    BALANCED(720, 9, 680, 1320, 0.82f),
-    LUX(900, 7, 980, 2300, 1.00f);
+    ECO(540, 12, 520, 980, 0.64f),
+    BALANCED(720, 9, 920, 2050, 0.88f),
+    LUX(960, 7, 1450, 3400, 1.18f);
 
     final int maxRenderWidth;
     final int minimumGlyphStep;
@@ -27,7 +27,7 @@ enum RenderQuality {
     }
 
     int glyphStepFor(int width) {
-        int divisor = this == LUX ? 122 : this == BALANCED ? 94 : 72;
+        int divisor = this == LUX ? 138 : this == BALANCED ? 102 : 76;
         return Math.max(minimumGlyphStep, Math.round(width / (float) divisor));
     }
 

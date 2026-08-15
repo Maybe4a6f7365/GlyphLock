@@ -1,17 +1,24 @@
-# GlyphLock Android Prototype
+# GlyphLock Android visual prototype
 
-Native, dependency-light Android implementation of the Prototype-0 visual state machine.
+Native, dependency-light Android implementation of the offline semantic-morph state machine.
 
 ## Modules
 
-- `MainActivity`: local fixture/theme controls and live-wallpaper installer.
+- `MainActivity`: local fixture, theme, quality, and live-wallpaper controls.
 - `PreviewActivity`: deterministic full-screen interaction test.
 - `GlyphWallpaperService`: best-effort live-wallpaper interaction.
-- `GlyphSceneRenderer`: hybrid pre-rendered glyph field plus live morph subset.
+- `GlyphSceneRenderer`: ambient raster plus persistent source-glyph topology.
 - `ExperienceController`: ambient/reveal/listen/result/collapse state machine.
 - `TouchInterpreter`: semantic gesture mapping.
 
 The manifest intentionally declares no internet, microphone, notification, contacts, calendar, or account permission.
+
+## Generate procedural resources
+
+```bash
+python -m pip install -r ../../scripts/requirements.txt
+python ../../scripts/generate_scene_masks.py
+```
 
 ## Build
 
@@ -19,4 +26,4 @@ The manifest intentionally declares no internet, microphone, notification, conta
 gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
-A Gradle wrapper will be generated once the GitHub repository is created in an environment that can download Gradle distributions.
+The v0.7 Lux profile uses a 960 px internal scene and up to 4,300 persistent morph glyphs. Eco and Balanced profiles remain available for device profiling.

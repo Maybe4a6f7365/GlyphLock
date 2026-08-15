@@ -4,6 +4,7 @@ from __future__ import annotations
 from base64 import b64encode
 from pathlib import Path
 import argparse
+import re
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +27,10 @@ def make_html(theme: str, event: str, t: float) -> str:
     main = main.replace("import { layoutWithLines, prepareWithSegments } from './text-layout.js';\n", '')
     main = main.replace("import './style.css';\n", '')
 
-    names = ('sentinel', 'moth', 'orbit', 'neural_halo', 'cipher_cathedral', 'quantum_lattice', 'fusion_core', 'packet_bloom')
+    source = (ROOT / 'apps' / 'visual-lab' / 'src' / 'main.ts').read_text(encoding='utf-8')
+    names = tuple(dict.fromkeys(re.findall(r"\{\s*id:\s*'([a-z0-9_]+)'\s*,\s*label:", source)))
+    if theme not in names:
+        raise ValueError(f'unknown theme {theme!r}; available: {names}')
     selected_asset = data_uri(DIST / 'assets' / f'scene_{theme}.png')
     asset_literal = '{' + ','.join(f'{name}:SELECTED_ASSET' for name in names) + '}'
     main = main.replace('const EVENTS = [', f'const SELECTED_ASSET = `{selected_asset}`;\nconst INLINE_ASSETS = {asset_literal};\nconst EVENTS = [', 1)

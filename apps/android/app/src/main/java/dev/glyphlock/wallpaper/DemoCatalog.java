@@ -5,7 +5,7 @@ import android.graphics.Color;
 import java.util.Arrays;
 import java.util.List;
 
-/** Local-only fixtures used by Prototype 0. No network or agent is involved. */
+/** Local-only fixtures used by the visual prototype. No network or agent is involved. */
 public final class DemoCatalog {
     private DemoCatalog() {}
 
@@ -14,114 +14,146 @@ public final class DemoCatalog {
         ORBITAL,
         CIRCUIT,
         RADIAL,
-        BLOOM
+        BLOOM,
+        WAVE,
+        FOLD
+    }
+
+    /**
+     * Describes how information inhabits a theme. These are composition grammars, not cards.
+     * The renderer uses them to place language along the artwork's existing structural logic.
+     */
+    public enum CompositionStyle {
+        FIGURE,
+        CORE,
+        ORBITAL_BAND,
+        ARCHITECTURE,
+        SPLICE,
+        FIELD
     }
 
     public enum Theme {
         SENTINEL(
-                "Sentinel", R.drawable.scene_sentinel, 0.55f,
+                "Sentinel", R.drawable.scene_sentinel, 0.53f, 0.72f,
                 "[]<>/\\|01", 1.00f, Color.rgb(206, 229, 240), 0.50f, 0.27f,
-                MotionStyle.FLOW, 0.72f
+                MotionStyle.FLOW, CompositionStyle.FIGURE, 0.72f
         ),
         MOTH(
-                "Moth", R.drawable.scene_moth, 0.57f,
+                "Moth", R.drawable.scene_moth, 0.51f, 0.69f,
                 "(){}<>/\\:;", 1.02f, Color.rgb(230, 219, 188), 0.50f, 0.38f,
-                MotionStyle.FLOW, 0.84f
+                MotionStyle.BLOOM, CompositionStyle.FIGURE, 0.88f
         ),
         ORBIT(
-                "Orbit", R.drawable.scene_orbit, 0.60f,
+                "Orbit", R.drawable.scene_orbit, 0.55f, 0.72f,
                 "0O()[]:.;01", 1.05f, Color.rgb(208, 199, 244), 0.50f, 0.34f,
-                MotionStyle.ORBITAL, 0.82f
+                MotionStyle.ORBITAL, CompositionStyle.ORBITAL_BAND, 0.86f
         ),
         NEURAL_HALO(
-                "Neural Halo", R.drawable.scene_neural_halo, 0.58f,
+                "Neural Halo", R.drawable.scene_neural_halo, 0.53f, 0.68f,
                 ".:;~λψ∇01+<>@", 1.20f, Color.rgb(137, 235, 221), 0.50f, 0.35f,
-                MotionStyle.RADIAL, 1.05f
+                MotionStyle.RADIAL, CompositionStyle.CORE, 1.05f
         ),
         CIPHER_CATHEDRAL(
-                "Cipher Cathedral", R.drawable.scene_cipher_cathedral, 0.56f,
+                "Cipher Cathedral", R.drawable.scene_cipher_cathedral, 0.53f, 0.62f,
                 ".:;|[]{}0x#AF16+-", 1.22f, Color.rgb(246, 194, 119), 0.50f, 0.39f,
-                MotionStyle.CIRCUIT, 0.92f
+                MotionStyle.CIRCUIT, CompositionStyle.ARCHITECTURE, 0.92f
         ),
         QUANTUM_LATTICE(
-                "Quantum Lattice", R.drawable.scene_quantum_lattice, 0.61f,
+                "Quantum Lattice", R.drawable.scene_quantum_lattice, 0.56f, 0.72f,
                 ".:~λψ∂∇∞01()<>@", 1.19f, Color.rgb(196, 178, 255), 0.50f, 0.38f,
-                MotionStyle.ORBITAL, 1.08f
+                MotionStyle.WAVE, CompositionStyle.FIELD, 1.08f
         ),
         FUSION_CORE(
-                "Fusion Core", R.drawable.scene_fusion_core, 0.61f,
+                "Fusion Core", R.drawable.scene_fusion_core, 0.55f, 0.66f,
                 ".:;=+⊙○()[]|01#@", 1.19f, Color.rgb(126, 221, 250), 0.50f, 0.39f,
-                MotionStyle.ORBITAL, 1.18f
+                MotionStyle.ORBITAL, CompositionStyle.CORE, 1.18f
         ),
         PACKET_BLOOM(
-                "Packet Bloom", R.drawable.scene_packet_bloom, 0.59f,
+                "Packet Bloom", R.drawable.scene_packet_bloom, 0.55f, 0.68f,
                 ".:;<>[]{}:/\\01TCPIP+@", 1.21f, Color.rgb(166, 240, 193), 0.50f, 0.41f,
-                MotionStyle.BLOOM, 1.05f
+                MotionStyle.BLOOM, CompositionStyle.CORE, 1.05f
         ),
         EVENT_HORIZON(
-                "Event Horizon", R.drawable.scene_event_horizon, 0.59f,
+                "Event Horizon", R.drawable.scene_event_horizon, 0.54f, 0.70f,
                 ".:;~O0()[]<>∞λ01#@", 1.24f, Color.rgb(255, 173, 112), 0.50f, 0.38f,
-                MotionStyle.ORBITAL, 1.24f
+                MotionStyle.ORBITAL, CompositionStyle.ORBITAL_BAND, 1.24f
         ),
         TESSERACT_ENGINE(
-                "Tesseract Engine", R.drawable.scene_tesseract_engine, 0.57f,
+                "Tesseract Engine", R.drawable.scene_tesseract_engine, 0.52f, 0.60f,
                 ".:;|+-=[]{}<>01XYZW", 1.22f, Color.rgb(164, 211, 255), 0.50f, 0.36f,
-                MotionStyle.CIRCUIT, 1.08f
+                MotionStyle.FOLD, CompositionStyle.ARCHITECTURE, 1.08f
         ),
         HELIX_ARRAY(
-                "Helix Array", R.drawable.scene_helix_array, 0.61f,
+                "Helix Array", R.drawable.scene_helix_array, 0.56f, 0.62f,
                 ".:;~ATCGλψ01/\\()[]", 1.19f, Color.rgb(151, 238, 211), 0.50f, 0.39f,
-                MotionStyle.FLOW, 1.03f
+                MotionStyle.FLOW, CompositionStyle.SPLICE, 1.03f
         ),
         INTERFERENCE_FIELD(
-                "Interference Field", R.drawable.scene_interference_field, 0.58f,
+                "Interference Field", R.drawable.scene_interference_field, 0.54f, 0.72f,
                 ".:;~≈∿λψ01()<>+@", 1.18f, Color.rgb(239, 176, 242), 0.50f, 0.35f,
-                MotionStyle.RADIAL, 1.12f
+                MotionStyle.WAVE, CompositionStyle.FIELD, 1.12f
         ),
         CRYO_VAULT(
-                "Cryo Vault", R.drawable.scene_cryo_vault, 0.60f,
+                "Cryo Vault", R.drawable.scene_cryo_vault, 0.56f, 0.58f,
                 ".:;|[]{}HEXICE01+*", 1.20f, Color.rgb(182, 232, 255), 0.50f, 0.41f,
-                MotionStyle.CIRCUIT, 0.96f
+                MotionStyle.CIRCUIT, CompositionStyle.ARCHITECTURE, 0.96f
         ),
         DYSON_RELAY(
-                "Dyson Relay", R.drawable.scene_dyson_relay, 0.59f,
+                "Dyson Relay", R.drawable.scene_dyson_relay, 0.55f, 0.66f,
                 ".:;O0()[]{}<>01+*#@", 1.23f, Color.rgb(255, 214, 140), 0.50f, 0.36f,
-                MotionStyle.ORBITAL, 1.14f
+                MotionStyle.ORBITAL, CompositionStyle.ORBITAL_BAND, 1.14f
+        ),
+        SPECTRAL_OBSERVATORY(
+                "Spectral Observatory", R.drawable.scene_spectral_observatory, 0.55f, 0.72f,
+                ".:;~≈∿RFHz01[]<>/\\", 1.21f, Color.rgb(145, 225, 255), 0.50f, 0.39f,
+                MotionStyle.WAVE, CompositionStyle.FIELD, 1.08f
+        ),
+        RECURSIVE_MONOLITH(
+                "Recursive Monolith", R.drawable.scene_recursive_monolith, 0.54f, 0.58f,
+                ".:;|+-=[]{}<>01∞", 1.23f, Color.rgb(221, 205, 255), 0.50f, 0.38f,
+                MotionStyle.FOLD, CompositionStyle.ARCHITECTURE, 1.10f
         );
 
         public final String label;
         public final int maskResource;
-        /** Center of the readable event cavity as a fraction of canvas height. */
-        public final float cavityFraction;
+        /** Vertical semantic anchor, expressed as a fraction of the canvas height. */
+        public final float semanticY;
+        /** Maximum language width as a fraction of the canvas width. */
+        public final float semanticWidth;
         public final String textureGlyphs;
         public final float exposure;
         public final int atmosphereColor;
         public final float atmosphereX;
         public final float atmosphereY;
         public final MotionStyle motionStyle;
+        public final CompositionStyle compositionStyle;
         public final float motionStrength;
 
         Theme(
                 String label,
                 int maskResource,
-                float cavityFraction,
+                float semanticY,
+                float semanticWidth,
                 String textureGlyphs,
                 float exposure,
                 int atmosphereColor,
                 float atmosphereX,
                 float atmosphereY,
                 MotionStyle motionStyle,
+                CompositionStyle compositionStyle,
                 float motionStrength
         ) {
             this.label = label;
             this.maskResource = maskResource;
-            this.cavityFraction = cavityFraction;
+            this.semanticY = semanticY;
+            this.semanticWidth = semanticWidth;
             this.textureGlyphs = textureGlyphs;
             this.exposure = exposure;
             this.atmosphereColor = atmosphereColor;
             this.atmosphereX = atmosphereX;
             this.atmosphereY = atmosphereY;
             this.motionStyle = motionStyle;
+            this.compositionStyle = compositionStyle;
             this.motionStrength = motionStrength;
         }
 
