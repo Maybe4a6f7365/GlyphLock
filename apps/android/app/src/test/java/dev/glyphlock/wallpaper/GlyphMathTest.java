@@ -26,6 +26,20 @@ public class GlyphMathTest {
     }
 
     @Test
+    public void distanceToRectIsZeroInsideAndEuclideanOutside() {
+        assertEquals(0f, GlyphMath.distanceToRect(5f, 5f, 0f, 0f, 10f, 10f), 0f);
+        assertEquals(5f, GlyphMath.distanceToRect(15f, 5f, 0f, 0f, 10f, 10f), 0.0001f);
+    }
+
+    @Test
+    public void localInfluenceKeepsConfiguredIdentityFloor() {
+        float near = GlyphMath.localInfluence(0f, 10f, .3f);
+        float far = GlyphMath.localInfluence(100f, 10f, .3f);
+        assertEquals(1f, near, 0.0001f);
+        assertTrue(far >= .29f && far <= .31f);
+    }
+
+    @Test
     public void smoothIsMonotonicForRepresentativeSamples() {
         float previous = -1f;
         for (int i = 0; i <= 100; i++) {

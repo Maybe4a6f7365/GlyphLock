@@ -8,8 +8,8 @@ import org.junit.Test;
 
 public class ThemeCompositionTest {
     @Test
-    public void catalogHasSixteenWallpaperSystems() {
-        assertEquals(16, DemoCatalog.Theme.values().length);
+    public void catalogHasTwentyWallpaperSystems() {
+        assertEquals(20, DemoCatalog.Theme.values().length);
     }
 
     @Test

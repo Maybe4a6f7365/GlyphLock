@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 import math
 import random
+import argparse
+import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
 
@@ -768,48 +771,299 @@ def recursive_monolith() -> Image.Image:
 
     return add_grain(edge_fade(composite(base, soft, detail, 17)), 271828, 8)
 
-def save(name: str, img: Image.Image):
+
+
+def chrono_loom() -> Image.Image:
+    """Clockwork time loom: broken dials, woven phase threads, and a suspended escapement."""
+    base, soft, detail, s, d = layered_canvas()
+    cx, cy = W // 2, 890
+    rng = random.Random(314159)
+
+    for index, (rx, ry) in enumerate(((132, 132), (238, 224), (365, 326), (520, 430), (720, 560))):
+        d.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), outline=max(16, 210-index*38), width=max(2, 8-index))
+
+    # Broken timing ring and radial ticks.
+    for i in range(96):
+        angle = math.tau * i / 96 - math.pi / 2
+        inner = 260 + 18 * math.sin(i * .71)
+        outer = inner + (58 if i % 8 == 0 else 28 if i % 4 == 0 else 13)
+        a = polar(cx, cy, inner, angle)
+        b = polar(cx, cy, outer, angle)
+        d.line((a, b), fill=70 + (i % 8) * 18, width=4 if i % 8 == 0 else 2)
+
+    # Woven phase threads remain legible behind the central semantic dial.
+    for i in range(27):
+        t = i / 26
+        x0 = 95 + t * (W - 190)
+        phase = i * .63
+        points = []
+        for step in range(91):
+            u = step / 90
+            y = 350 + u * 1580
+            envelope = math.sin(math.pi * u) ** .72
+            x = x0 + math.sin(u * math.pi * 5.5 + phase) * (58 + 74 * envelope)
+            points.append((int(x), int(y)))
+        d.line(points, fill=22 + (i % 6) * 15, width=2, joint='curve')
+
+    # Escapement, time hands, and lower calibration architecture.
+    s.ellipse((cx-92, cy-92, cx+92, cy+92), fill=120)
+    d.ellipse((cx-92, cy-92, cx+92, cy+92), outline=242, width=8)
+    d.line((cx, cy, cx + 210, cy - 158), fill=238, width=8)
+    d.line((cx, cy, cx - 88, cy - 278), fill=170, width=6)
+    d.ellipse((cx-20, cy-20, cx+20, cy+20), fill=255)
+    d.line((cx, cy+90, cx, 1910), fill=118, width=5)
+    d.rounded_rectangle((cx-108, 1280, cx+108, 2060), 42, outline=96, width=5)
+    for y in range(1340, 2010, 47):
+        half = 72 + int(21 * math.sin(y / 83))
+        d.line((cx-half, y, cx+half, y), fill=34 + (y // 47) % 6 * 18, width=2)
+    for _ in range(120):
+        angle = rng.random() * math.tau
+        radius = rng.uniform(180, 820)
+        x, y = polar(cx, cy, radius, angle)
+        value = rng.randint(18, 92)
+        d.point((x, y), fill=value)
+
+    return add_grain(edge_fade(composite(base, soft, detail, 16)), 314159, 8)
+
+
+def muon_chamber() -> Image.Image:
+    """Particle detector chamber with collision tracks and layered calorimeter geometry."""
+    base, soft, detail, s, d = layered_canvas()
+    cx, cy = W // 2, 930
+    rng = random.Random(10566)
+
+    for index, radius in enumerate((105, 205, 330, 485, 675, 880)):
+        d.ellipse((cx-radius, cy-radius*.72, cx+radius, cy+radius*.72), outline=max(12, 220-index*34), width=max(2, 8-index))
+
+    # Collision tracks use curved trajectories rather than icon-like spokes.
+    for i in range(46):
+        angle = rng.uniform(-math.pi, math.pi)
+        length = rng.uniform(260, 880)
+        bend = rng.uniform(-.75, .75)
+        start = (cx + rng.randint(-18, 18), cy + rng.randint(-18, 18))
+        end = (int(cx + math.cos(angle) * length), int(cy + math.sin(angle) * length * .74))
+        control = (
+            int(cx + math.cos(angle + bend) * length * .48),
+            int(cy + math.sin(angle + bend) * length * .42),
+        )
+        track = bezier(start, control, end, 64)
+        d.line(track, fill=rng.randint(42, 176), width=rng.choice((1, 2, 2, 3)), joint='curve')
+        if i % 3 == 0:
+            for point in track[10::12]:
+                x, y = point
+                d.ellipse((x-3, y-3, x+3, y+3), fill=rng.randint(105, 220))
+
+    # Chamber plates and readout stack.
+    for side in (-1, 1):
+        x = cx + side * 410
+        d.line((x, 390, x, 1740), fill=82, width=4)
+        for y in range(430, 1710, 62):
+            length = 34 + ((y // 62) % 6) * 10
+            d.line((x-side*length, y, x+side*8, y), fill=36 + (y // 62) % 5 * 22, width=2)
+    d.rounded_rectangle((cx-150, 1370, cx+150, 2110), 46, outline=108, width=6)
+    for y in range(1440, 2040, 42):
+        for x in range(cx-112, cx+113, 32):
+            value = 28 + ((x + y) // 17) % 7 * 20
+            d.rectangle((x-6, y-5, x+6, y+5), fill=value)
+    s.ellipse((cx-55, cy-55, cx+55, cy+55), fill=180)
+    d.ellipse((cx-20, cy-20, cx+20, cy+20), fill=255)
+
+    return add_grain(edge_fade(composite(base, soft, detail, 15)), 10566, 8)
+
+
+def vector_shrine() -> Image.Image:
+    """Asymmetric cyber shrine with vector rails and a descending telemetry cascade."""
+    base, soft, detail, s, d = layered_canvas()
+    cx = W // 2
+
+    shell = [(cx, 250), (cx+300, 540), (cx+238, 1940), (cx, 2190), (cx-330, 1940), (cx-260, 540)]
+    s.polygon(shell, fill=32)
+    d.line(shell + [shell[0]], fill=145, width=8, joint='curve')
+
+    # Offset inner frames avoid another centered rectangular monolith.
+    for depth in range(8):
+        inset = depth * 30
+        offset = int(math.sin(depth * .9) * 46)
+        frame = [
+            (cx-220+inset+offset, 500+inset*2),
+            (cx+245-inset+offset, 500+inset),
+            (cx+185-inset-offset, 1850-inset),
+            (cx-245+inset-offset, 1850-inset*2),
+        ]
+        d.line(frame + [frame[0]], fill=48 + depth * 20, width=max(2, 7-depth//2), joint='curve')
+
+    # Vector rails and telemetry steps.
+    for side in (-1, 1):
+        x = cx + side * 360
+        d.line((x, 360, x, 2070), fill=42, width=3)
+        for i, y in enumerate(range(420, 2020, 58)):
+            length = 24 + (i % 7) * 11
+            d.line((x-side*length, y, x+side*5, y), fill=44 + (i % 6) * 18, width=2)
+    for row, y in enumerate(range(680, 1760, 54)):
+        shift = int(math.sin(row * .74) * 68)
+        half = 85 + (row % 5) * 17
+        d.line((cx-half+shift, y, cx+half+shift, y), fill=46 + (row % 7) * 20, width=2)
+        if row % 3 == 0:
+            d.line((cx+shift, y-26, cx+shift, y+26), fill=118, width=3)
+
+    s.rounded_rectangle((cx-76, 750, cx+76, 1560), 36, fill=98)
+    d.rounded_rectangle((cx-76, 750, cx+76, 1560), 36, outline=232, width=7)
+    d.ellipse((cx-22, 1080, cx+22, 1124), fill=255)
+    d.line((cx, 300, cx, 2140), fill=84, width=4)
+
+    return add_grain(edge_fade(composite(base, soft, detail, 17)), 424242, 8)
+
+
+def lagrange_garden() -> Image.Image:
+    """Orbital mechanics rendered as a living garden around five stable Lagrange nodes."""
+    base, soft, detail, s, d = layered_canvas()
+    cx, cy = W // 2, 900
+    rng = random.Random(515151)
+
+    for rx, ry, fill, width in ((170, 115, 220, 7), (310, 205, 120, 5), (500, 330, 58, 3), (730, 470, 26, 2)):
+        d.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), outline=fill, width=width)
+
+    nodes = [
+        (cx-350, cy, 'L3'),
+        (cx+350, cy, 'L2'),
+        (cx+130, cy, 'L1'),
+        (cx+115, cy-270, 'L4'),
+        (cx+115, cy+270, 'L5'),
+    ]
+    for index, (x, y, _label) in enumerate(nodes):
+        radius = 35 if index < 3 else 48
+        d.ellipse((x-radius, y-radius, x+radius, y+radius), outline=170 + index * 14, width=6)
+        d.ellipse((x-8, y-8, x+8, y+8), fill=245)
+        for petal in range(7):
+            angle = math.tau * petal / 7 + index * .31
+            px, py = polar(x, y, radius + 32, angle)
+            d.ellipse((px-12, py-24, px+12, py+24), outline=54 + petal * 13, width=2)
+
+    # Transfer orbits and botanical root trajectories.
+    for i in range(21):
+        angle = -1.15 + i * 2.3 / 20
+        start = polar(cx, cy, 120, angle)
+        end = (int(cx + math.sin(angle) * (360 + i * 18)), int(1320 + i * 34))
+        control = (int(cx + math.sin(angle * 1.7) * 360), int(1040 + i * 24))
+        d.line(bezier(start, control, end, 56), fill=28 + (i % 6) * 18, width=2, joint='curve')
+    for _ in range(110):
+        x = rng.randint(60, W-60)
+        y = rng.randint(300, 2150)
+        value = rng.randint(20, 92)
+        d.point((x, y), fill=value)
+
+    s.ellipse((cx-78, cy-78, cx+78, cy+78), fill=150)
+    d.ellipse((cx-78, cy-78, cx+78, cy+78), outline=230, width=7)
+    d.ellipse((cx-18, cy-18, cx+18, cy+18), fill=255)
+    d.line((cx, 1080, cx, 2080), fill=70, width=4)
+
+    return add_grain(edge_fade(composite(base, soft, detail, 16)), 515151, 8)
+
+def save(name: str, img: Image.Image, compress_level: int = 6):
     OUT_WEB.mkdir(parents=True, exist_ok=True)
     OUT_ANDROID.mkdir(parents=True, exist_ok=True)
-    img.save(OUT_WEB/f"scene_{name}.png", optimize=True)
-    img.save(OUT_ANDROID/f"scene_{name}.png", optimize=True)
+    img.save(OUT_WEB / f"scene_{name}.png", compress_level=compress_level)
+    img.save(OUT_ANDROID / f"scene_{name}.png", compress_level=compress_level)
 
 
-def thumbnail():
-    src = Image.open(OUT_WEB/"scene_sentinel.png").resize((220,488), Image.Resampling.LANCZOS)
-    out = Image.new("RGB", (512,512), "black")
+SCENES = {
+    "sentinel": sentinel,
+    "moth": moth,
+    "orbit": orbit,
+    "neural_halo": neural_halo,
+    "cipher_cathedral": cipher_cathedral,
+    "quantum_lattice": quantum_lattice,
+    "fusion_core": fusion_core,
+    "packet_bloom": packet_bloom,
+    "event_horizon": event_horizon,
+    "tesseract_engine": tesseract_engine,
+    "helix_array": helix_array,
+    "interference_field": interference_field,
+    "cryo_vault": cryo_vault,
+    "dyson_relay": dyson_relay,
+    "spectral_observatory": spectral_observatory,
+    "recursive_monolith": recursive_monolith,
+    "chrono_loom": chrono_loom,
+    "muon_chamber": muon_chamber,
+    "vector_shrine": vector_shrine,
+    "lagrange_garden": lagrange_garden,
+}
+
+
+def render_and_save(name: str, compress_level: int) -> str:
+    save(name, SCENES[name](), compress_level=compress_level)
+    return name
+
+
+def thumbnail(compress_level: int = 6):
+    source = OUT_WEB / "scene_sentinel.png"
+    if not source.exists():
+        return
+    src = Image.open(source).resize((220, 488), Image.Resampling.LANCZOS)
+    out = Image.new("RGB", (512, 512), "black")
     arr = np.asarray(src)
     draw = ImageDraw.Draw(out)
     ramp = " .:;+=x#@"
-    for y in range(0,488,6):
-        for x in range(0,220,6):
-            v=int(arr[y:y+6,x:x+6].mean())
-            if v<16: continue
-            ch=ramp[min(len(ramp)-1,int(v/256*len(ramp)))]
-            draw.text((146+x,12+y),ch,fill=(v,v,min(255,v+12)))
-    p=ROOT/"apps/android/app/src/main/res/drawable/wallpaper_thumbnail.png"
-    out.save(p,optimize=True)
-    out.save(OUT_WEB/"wallpaper_thumbnail.png", optimize=True)
+    for y in range(0, 488, 6):
+        for x in range(0, 220, 6):
+            value = int(arr[y:y+6, x:x+6].mean())
+            if value < 16:
+                continue
+            glyph = ramp[min(len(ramp)-1, int(value / 256 * len(ramp)))]
+            draw.text((146+x, 12+y), glyph, fill=(value, value, min(255, value+12)))
+    path = ROOT / "apps/android/app/src/main/res/drawable/wallpaper_thumbnail.png"
+    out.save(path, compress_level=compress_level)
+    out.save(OUT_WEB / "wallpaper_thumbnail.png", compress_level=compress_level)
+
+
+def parse_selection(values: list[str] | None) -> list[str]:
+    if not values:
+        return list(SCENES)
+    selected: list[str] = []
+    for raw in values:
+        for name in raw.split(','):
+            clean = name.strip()
+            if not clean:
+                continue
+            if clean not in SCENES:
+                raise SystemExit(f"unknown scene {clean!r}; available: {', '.join(SCENES)}")
+            if clean not in selected:
+                selected.append(clean)
+    return selected
 
 
 def main():
-    save("sentinel", sentinel())
-    save("moth", moth())
-    save("orbit", orbit())
-    save("neural_halo", neural_halo())
-    save("cipher_cathedral", cipher_cathedral())
-    save("quantum_lattice", quantum_lattice())
-    save("fusion_core", fusion_core())
-    save("packet_bloom", packet_bloom())
-    save("event_horizon", event_horizon())
-    save("tesseract_engine", tesseract_engine())
-    save("helix_array", helix_array())
-    save("interference_field", interference_field())
-    save("cryo_vault", cryo_vault())
-    save("dyson_relay", dyson_relay())
-    save("spectral_observatory", spectral_observatory())
-    save("recursive_monolith", recursive_monolith())
-    thumbnail()
-    print("generated")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--only', action='append', help='scene name or comma-separated scene names')
+    parser.add_argument('--jobs', type=int, default=min(3, max(1, os.cpu_count() or 1)))
+    parser.add_argument('--skip-existing', action='store_true')
+    parser.add_argument('--compress-level', type=int, default=6, choices=range(0, 10))
+    args = parser.parse_args()
 
-if __name__ == "__main__": main()
+    selected = parse_selection(args.only)
+    if args.skip_existing:
+        selected = [
+            name for name in selected
+            if not (OUT_WEB / f"scene_{name}.png").exists()
+            or not (OUT_ANDROID / f"scene_{name}.png").exists()
+        ]
+
+    if args.jobs <= 1 or len(selected) <= 1:
+        for name in selected:
+            render_and_save(name, args.compress_level)
+            print(f"generated {name}", flush=True)
+    else:
+        with ProcessPoolExecutor(max_workers=min(args.jobs, len(selected))) as executor:
+            futures = {
+                executor.submit(render_and_save, name, args.compress_level): name
+                for name in selected
+            }
+            for future in as_completed(futures):
+                print(f"generated {future.result()}", flush=True)
+
+    thumbnail(args.compress_level)
+    print(f"generated {len(selected)} scene(s)")
+
+
+if __name__ == "__main__":
+    main()

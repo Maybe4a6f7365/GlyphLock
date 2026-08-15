@@ -1,4 +1,4 @@
-name: Prototype 0 CI
+name: GlyphLock visual systems CI
 
 on:
   push:
@@ -18,14 +18,15 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install -r scripts/requirements.txt
-      - run: python scripts/generate_scene_masks.py
+      - run: python scripts/generate_scene_masks.py --jobs 3 --compress-level 6
       - run: python scripts/check_morph_first.py
       - run: python scripts/check_theme_catalog.py
       - run: python scripts/check_semantic_composition.py
+      - run: python scripts/check_transport_integrity.py
       - run: python scripts/build_mask_contact_sheet.py
       - uses: actions/upload-artifact@v4
         with:
-          name: glyphlock-design-contact-sheet
+          name: glyphlock-v080-design-contact-sheet
           path: build/review/glyphlock-mask-contact-sheet.png
       - uses: actions/setup-node@v4
         with:
@@ -36,7 +37,7 @@ jobs:
         run: npm run build
       - uses: actions/upload-artifact@v4
         with:
-          name: glyphlock-visual-lab
+          name: glyphlock-v080-visual-lab
           path: apps/visual-lab/dist
 
   android:
@@ -47,10 +48,11 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install -r scripts/requirements.txt
-      - run: python scripts/generate_scene_masks.py
+      - run: python scripts/generate_scene_masks.py --jobs 3 --compress-level 6
       - run: python scripts/check_morph_first.py
       - run: python scripts/check_theme_catalog.py
       - run: python scripts/check_semantic_composition.py
+      - run: python scripts/check_transport_integrity.py
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -73,13 +75,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: glyphlock-v070-android-build-log
+          name: glyphlock-v080-android-build-log
           path: ${{ runner.temp }}/glyphlock-android-build.log
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: steps.android_build.outcome == 'success'
         with:
-          name: GlyphLock-semantic-compositions-v070-debug-apk
+          name: GlyphLock-signature-systems-v080-debug-apk
           path: apps/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Fail when Android validation failed

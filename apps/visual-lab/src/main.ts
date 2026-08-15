@@ -17,9 +17,13 @@ type ThemeId =
   | 'dyson_relay'
   | 'spectral_observatory'
   | 'recursive_monolith'
+  | 'chrono_loom'
+  | 'muon_chamber'
+  | 'vector_shrine'
+  | 'lagrange_garden'
 type EventId = 'mail' | 'calendar' | 'github' | 'security' | 'network' | 'model'
 type MotionStyle = 'flow' | 'orbital' | 'circuit' | 'radial' | 'bloom' | 'wave' | 'fold'
-type CompositionStyle = 'figure' | 'core' | 'orbital_band' | 'architecture' | 'splice' | 'field'
+type CompositionStyle = 'figure' | 'core' | 'orbital_band' | 'architecture' | 'splice' | 'field' | 'dial' | 'cascade' | 'constellation'
 type TargetRole = 'title' | 'summary' | 'meta' | 'action' | 'structure'
 type PushAxis = 'horizontal' | 'vertical' | 'radial'
 type MotionProfile = 'calm' | 'cinematic' | 'hyper'
@@ -160,6 +164,10 @@ const THEMES: ThemeSpec[] = [
   { id: 'dyson_relay', label: 'Dyson Relay', semanticY: .55, semanticWidth: .66, palette: ' .·:;O0()[]{}<>01+*#@', tint: [255, 214, 140], atmosphereY: 860, densityBias: .010, motion: 'orbital', composition: 'orbital_band', motionStrength: 1.14 },
   { id: 'spectral_observatory', label: 'Spectral Observatory', semanticY: .55, semanticWidth: .72, palette: ' .·:;~≈∿RFHz01[]<>/\\', tint: [145, 225, 255], atmosphereY: 936, densityBias: .011, motion: 'wave', composition: 'field', motionStrength: 1.08 },
   { id: 'recursive_monolith', label: 'Recursive Monolith', semanticY: .54, semanticWidth: .58, palette: ' .:;|+-=[]{}<>01∞', tint: [221, 205, 255], atmosphereY: 912, densityBias: .009, motion: 'fold', composition: 'architecture', motionStrength: 1.10 },
+  { id: 'chrono_loom', label: 'Chrono Loom', semanticY: .54, semanticWidth: .70, palette: ' .·:;⌁⌇⟲⟳01[]<>+@', tint: [255, 208, 132], atmosphereY: 888, densityBias: .010, motion: 'orbital', composition: 'dial', motionStrength: 1.15 },
+  { id: 'muon_chamber', label: 'Muon Chamber', semanticY: .55, semanticWidth: .68, palette: ' .·:;μνλψ01()[]<>#@', tint: [206, 169, 255], atmosphereY: 936, densityBias: .012, motion: 'radial', composition: 'dial', motionStrength: 1.18 },
+  { id: 'vector_shrine', label: 'Vector Shrine', semanticY: .53, semanticWidth: .62, palette: ' .:;|+-=[]{}<>XYZ01#', tint: [139, 230, 255], atmosphereY: 960, densityBias: .009, motion: 'circuit', composition: 'cascade', motionStrength: 1.02 },
+  { id: 'lagrange_garden', label: 'Lagrange Garden', semanticY: .55, semanticWidth: .70, palette: ' .·:;~✦✧L₁L₂01()<>+', tint: [170, 242, 196], atmosphereY: 912, densityBias: .013, motion: 'bloom', composition: 'constellation', motionStrength: 1.10 },
 ]
 
 const THEME_BY_ID = new Map(THEMES.map(theme => [theme.id, theme] as const))
@@ -181,6 +189,18 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 const mix = (a: number, b: number, t: number) => a + (b - a) * t
 const smooth = (t: number) => { const x = clamp01(t); return x * x * (3 - 2 * x) }
 const ease = (t: number) => 1 - Math.pow(1 - clamp01(t), 3)
+const distanceToRect = (
+  x: number, y: number, left: number, top: number, right: number, bottom: number,
+): number => {
+  const dx = x < left ? left - x : x > right ? x - right : 0
+  const dy = y < top ? top - y : y > bottom ? y - bottom : 0
+  return Math.hypot(dx, dy)
+}
+const localInfluence = (distance: number, radius: number, floor: number): number => {
+  const safeRadius = Math.max(.001, radius)
+  const gaussian = Math.exp(-(distance * distance) / (2 * safeRadius * safeRadius))
+  return clamp01(floor + (1 - floor) * gaussian)
+}
 const hash = (x: number, y: number, seed = 0) => {
   const n = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453123
   return n - Math.floor(n)
@@ -343,8 +363,8 @@ class GlyphLockRenderer {
     const sources = this.selectMorphSources()
     const eventLayout = this.buildTargetLayout(false)
     const resultLayout = this.buildTargetLayout(true)
-    const eventAssignments = this.assignNearestTargets(sources, eventLayout.targets)
-    const resultAssignments = this.assignNearestTargets(sources, resultLayout.targets)
+    const eventAssignments = this.assignCoherentTargets(sources, eventLayout.targets)
+    const resultAssignments = this.assignCoherentTargets(sources, resultLayout.targets)
     const focusX = INTERNAL_W / 2
     const focusY = this.themeSpec.atmosphereY
     const diagonal = Math.hypot(INTERNAL_W, INTERNAL_H)
@@ -400,9 +420,10 @@ class GlyphLockRenderer {
     const left = centerX - contentWidth / 2
     const right = centerX + contentWidth / 2
     const anchorY = INTERNAL_H * spec.semanticY
-    const topOffset = spec.composition === 'architecture' ? INTERNAL_H * .125
+    const topOffset = spec.composition === 'architecture' || spec.composition === 'cascade' ? INTERNAL_H * .125
       : spec.composition === 'splice' ? INTERNAL_H * .118
-      : spec.composition === 'field' ? INTERNAL_H * .112
+      : spec.composition === 'field' || spec.composition === 'constellation' ? INTERNAL_H * .112
+      : spec.composition === 'dial' ? INTERNAL_H * .102
       : spec.composition === 'orbital_band' ? INTERNAL_H * .105
       : INTERNAL_H * .108
     const top = anchorY - topOffset
@@ -413,7 +434,8 @@ class GlyphLockRenderer {
     const summary = result ? event.resultSummary : event.summary
     const action = result ? 'TAP TO RETURN' : event.action
     const eyebrowSize = 20
-    const titleSize = this.fitTextSize(title, contentWidth, 56, 35, 520)
+    const preferredTitle = spec.composition === 'cascade' ? 52 : 56
+    const titleSize = this.fitTextSize(title, contentWidth, preferredTitle, 35, 520)
     const summarySize = 27
     const actionSize = 19
 
@@ -428,36 +450,57 @@ class GlyphLockRenderer {
     }
     const actionY = summaryY + INTERNAL_H * .034 + actionSize
 
-    const primaryAlign: CanvasTextAlign = spec.composition === 'architecture' ? 'left' : 'center'
-    const metaAlign: CanvasTextAlign = spec.composition === 'field' ? 'left' : primaryAlign
-    const actionAlign: CanvasTextAlign = spec.composition === 'field' ? 'right' : primaryAlign
+    const primaryAlign: CanvasTextAlign = spec.composition === 'architecture' || spec.composition === 'cascade' ? 'left' : 'center'
+    const metaAlign: CanvasTextAlign = spec.composition === 'field' || spec.composition === 'constellation'
+      ? 'left'
+      : spec.composition === 'cascade' ? 'right' : primaryAlign
+    const actionAlign: CanvasTextAlign = spec.composition === 'field' || spec.composition === 'constellation'
+      ? 'right'
+      : spec.composition === 'cascade' ? 'left' : primaryAlign
     const primaryAnchor = primaryAlign === 'left' ? left : centerX
-    const metaAnchor = metaAlign === 'left' ? left : centerX
+    const metaAnchor = metaAlign === 'left' ? left : metaAlign === 'right' ? right : centerX
     const actionAnchor = actionAlign === 'right' ? right : primaryAnchor
     const pushAxis = this.pushAxisFor(spec.composition)
 
-    // High-value language targets are assigned first; the remaining source field becomes structure.
     this.addAlignedLineTargets(targets, textBands, title, primaryAnchor, titleY, titleSize, [241, 247, 250], 1, primaryAlign, 'title', pushAxis, 520)
     summaryLines.forEach((line, index) => {
-      const lineAnchor = spec.composition === 'field' ? centerX + (index % 2 === 0 ? -27 : 27) : primaryAnchor
-      const lineAlign: CanvasTextAlign = spec.composition === 'field' ? 'center' : primaryAlign
+      let lineAnchor = primaryAnchor
+      let lineAlign = primaryAlign
+      if (spec.composition === 'field') {
+        lineAnchor = centerX + (index % 2 === 0 ? -27 : 27)
+        lineAlign = 'center'
+      } else if (spec.composition === 'cascade') {
+        lineAnchor = left + INTERNAL_W * (.018 + index * .026)
+        lineAlign = 'left'
+      } else if (spec.composition === 'constellation') {
+        const offsets = [-.052, .052, 0]
+        lineAnchor = centerX + INTERNAL_W * (offsets[Math.min(index, offsets.length - 1)] ?? 0)
+        lineAlign = 'center'
+      }
       this.addAlignedLineTargets(targets, textBands, line, lineAnchor, summaryBaselines[index]!, summarySize, [214, 225, 231], .90, lineAlign, 'summary', pushAxis, 400)
     })
-    this.addAlignedLineTargets(targets, textBands, eyebrow, metaAnchor, metaY, eyebrowSize, accent, .96, metaAlign, 'meta', pushAxis, 600)
-    this.addAlignedLineTargets(targets, textBands, action, actionAnchor, actionY, actionSize, accent, .98, actionAlign, 'action', pushAxis, 600)
+
+    if (spec.composition === 'dial') {
+      const arcCenterY = anchorY + INTERNAL_H * .003
+      this.addArcLineTargets(targets, textBands, eyebrow, centerX, arcCenterY, contentWidth * .55, INTERNAL_H * .092, -2.62, -.52, eyebrowSize, accent, .96, 'meta', 600)
+      this.addArcLineTargets(targets, textBands, action, centerX, arcCenterY, contentWidth * .53, INTERNAL_H * .102, .52, 2.62, actionSize, accent, .98, 'action', 600)
+    } else {
+      this.addAlignedLineTargets(targets, textBands, eyebrow, metaAnchor, metaY, eyebrowSize, accent, .96, metaAlign, 'meta', pushAxis, 600)
+      this.addAlignedLineTargets(targets, textBands, action, actionAnchor, actionY, actionSize, accent, .98, actionAlign, 'action', pushAxis, 600)
+    }
 
     const bounds = {
       left: left - INTERNAL_W * .035,
       top: top - INTERNAL_H * .015,
       right: right + INTERNAL_W * .035,
-      bottom: actionY + INTERNAL_H * .022,
+      bottom: Math.max(actionY + INTERNAL_H * .022, anchorY + INTERNAL_H * .115),
     }
     this.addSemanticStructure(targets, bounds, result)
     return { targets, textBands, bounds, centerX, centerY: anchorY }
   }
 
   private pushAxisFor(style: CompositionStyle): PushAxis {
-    if (style === 'architecture' || style === 'splice') return 'horizontal'
+    if (style === 'architecture' || style === 'splice' || style === 'cascade') return 'horizontal'
     if (style === 'field') return 'vertical'
     return 'radial'
   }
@@ -488,6 +531,31 @@ class GlyphLockRenderer {
     })
   }
 
+  private addArcLineTargets(
+    targets: TargetGlyph[], bands: TextBand[], text: string,
+    centerX: number, centerY: number, radiusX: number, radiusY: number,
+    startAngle: number, endAngle: number, size: number,
+    color: [number, number, number], alpha: number, role: TargetRole, weight: number,
+  ): void {
+    this.ctx.font = `${weight} ${size}px ${FONT_STACK}`
+    const advances = [...text].map(char => this.ctx.measureText(char).width)
+    const total = Math.max(1, advances.reduce((sum, value) => sum + value, 0))
+    let cursor = 0
+    ;[...text].forEach((char, index) => {
+      const advance = advances[index] ?? 0
+      const u = (cursor + advance * .5) / total
+      const angle = mix(startAngle, endAngle, u)
+      const x = centerX + Math.cos(angle) * radiusX
+      const y = centerY + Math.sin(angle) * radiusY
+      if (!/\s/.test(char)) {
+        targets.push({ x, y, char, size, alpha, color, text: true, role })
+        const pad = size * .60
+        bands.push({ bounds: { left: x - pad, top: y - pad, right: x + pad, bottom: y + pad }, pushAxis: 'radial' })
+      }
+      cursor += advance
+    })
+  }
+
   private addSemanticStructure(
     targets: TargetGlyph[], bounds: { left: number; top: number; right: number; bottom: number }, result: boolean,
   ): void {
@@ -499,6 +567,13 @@ class GlyphLockRenderer {
     const add = (x: number, y: number, index: number, alpha: number, size = 11.5) => {
       const char = STRUCTURE_GLYPHS[((index * 5 + 3) % STRUCTURE_GLYPHS.length + STRUCTURE_GLYPHS.length) % STRUCTURE_GLYPHS.length] ?? '·'
       targets.push({ x, y, char, size, alpha, color, text: false, role: 'structure' })
+    }
+    const line = (x1: number, y1: number, x2: number, y2: number, count: number, seed: number, alpha: number, size = 11.5) => {
+      const safe = Math.max(2, count)
+      for (let i = 0; i < safe; i++) {
+        const t = i / (safe - 1)
+        add(mix(x1, x2, t), mix(y1, y2, t), seed + i, alpha, size)
+      }
     }
 
     switch (this.themeSpec.composition) {
@@ -562,6 +637,76 @@ class GlyphLockRenderer {
           if (i % 3 === 0) add(centerX + Math.sin(t * Math.PI * 10) * 10, y, i + 89, .25)
         }
         break
+      case 'dial':
+        for (let ring = 0; ring < 3; ring++) {
+          const count = 112 - ring * 14
+          const rx = width * (.57 + ring * .105), ry = height * (.59 + ring * .105)
+          for (let i = 0; i < count; i++) {
+            const angle = Math.PI * 2 * i / count - Math.PI * .5
+            if ((i + ring * 3) % 11 === 0) continue
+            add(centerX + Math.cos(angle) * rx, centerY + Math.sin(angle) * ry, i + ring * 127, .43 - ring * .075)
+          }
+        }
+        for (let tick = 0; tick < 36; tick++) {
+          const angle = Math.PI * 2 * tick / 36 - Math.PI * .5
+          line(
+            centerX + Math.cos(angle) * width * .46,
+            centerY + Math.sin(angle) * height * .47,
+            centerX + Math.cos(angle) * width * .52,
+            centerY + Math.sin(angle) * height * .53,
+            tick % 3 === 0 ? 4 : 2,
+            tick * 7,
+            tick % 3 === 0 ? .46 : .27,
+          )
+        }
+        break
+      case 'cascade': {
+        const leftRail = bounds.left - INTERNAL_W * .075
+        const rightRail = bounds.right + INTERNAL_W * .075
+        for (let i = 0; i < 78; i++) {
+          const t = i / 77, y = mix(bounds.top - INTERNAL_H * .065, bounds.bottom + INTERNAL_H * .075, t)
+          if (i % 4 !== 1) {
+            add(leftRail, y, i, .44)
+            add(rightRail, y, i + 41, .34)
+          }
+          if (i % 5 === 0) {
+            const stair = (i % 10 < 5 ? -1 : 1) * INTERNAL_W * (.030 + (i % 3) * .012)
+            line(centerX + stair, y - INTERNAL_H * .018, centerX - stair * .35, y + INTERNAL_H * .018, 5, i + 83, .32)
+          }
+        }
+        for (let row = 0; row < 8; row++) {
+          const y = bounds.top - INTERNAL_H * .042 + row * INTERNAL_H * .023
+          const inset = row * INTERNAL_W * .018
+          line(bounds.left - INTERNAL_W * .025 + inset, y, bounds.right + INTERNAL_W * .025 - inset, y, 28 - row * 2, row * 31, .34 - row * .025)
+        }
+        break
+      }
+      case 'constellation': {
+        const nodes: Array<[number, number]> = [
+          [centerX - width * .56, centerY - height * .26],
+          [centerX - width * .30, centerY + height * .48],
+          [centerX, centerY - height * .58],
+          [centerX + width * .34, centerY + height * .44],
+          [centerX + width * .58, centerY - height * .18],
+          [centerX, centerY + height * .60],
+        ]
+        const edges: Array<[number, number]> = [[0, 2], [2, 4], [0, 1], [1, 5], [5, 3], [3, 4], [1, 2], [2, 3], [0, 5], [4, 5]]
+        nodes.forEach(([x, y], nodeIndex) => {
+          for (let ring = 0; ring < 3; ring++) {
+            const count = 12 + ring * 4
+            const rx = INTERNAL_W * (.018 + ring * .011), ry = INTERNAL_H * (.010 + ring * .005)
+            for (let point = 0; point < count; point++) {
+              const angle = Math.PI * 2 * point / count
+              add(x + Math.cos(angle) * rx, y + Math.sin(angle) * ry, nodeIndex * 43 + ring * 17 + point, .46 - ring * .10)
+            }
+          }
+        })
+        edges.forEach(([fromIndex, toIndex], edgeIndex) => {
+          const from = nodes[fromIndex]!, to = nodes[toIndex]!
+          line(from[0], from[1], to[0], to[1], 22, edgeIndex * 37, .25)
+        })
+        break
+      }
       case 'field':
         for (let row = -4; row <= 4; row++) {
           const y = centerY + row * INTERNAL_H * .056
@@ -576,25 +721,71 @@ class GlyphLockRenderer {
     }
   }
 
-  private assignNearestTargets(sources: GlyphPoint[], targets: TargetGlyph[]): Array<TargetGlyph | undefined> {
+  private assignCoherentTargets(sources: GlyphPoint[], targets: TargetGlyph[]): Array<TargetGlyph | undefined> {
+    const columns = 18, rows = 36, maxRadius = 7
+    const buckets: number[][] = Array.from({ length: columns * rows }, () => [])
+    const clampColumn = (value: number) => Math.max(0, Math.min(columns - 1, value))
+    const clampRow = (value: number) => Math.max(0, Math.min(rows - 1, value))
+    const bucketIndex = (x: number, y: number) => clampRow(Math.floor(y / INTERNAL_H * rows)) * columns + clampColumn(Math.floor(x / INTERNAL_W * columns))
+    sources.forEach((source, index) => buckets[bucketIndex(source.x, source.y)]!.push(index))
+
     const assignments: Array<TargetGlyph | undefined> = new Array(sources.length)
     const used = new Uint8Array(sources.length)
-    const verticalWeight = INTERNAL_W / INTERNAL_H * 1.8
+    let previousTargetX = Number.NaN
+    let previousTargetY = Number.NaN
+    let previousSourceX = Number.NaN
+    let previousWasText = false
+
+    const scoreFor = (source: GlyphPoint, target: TargetGlyph): number => {
+      const dx = source.x - target.x
+      const dy = (source.y - target.y) * (target.text ? 1.34 : 1.08)
+      const travel = dx * dx + dy * dy
+      const alphaReward = source.alpha * INTERNAL_W * INTERNAL_W * (target.text ? .020 : .009)
+      const normalized = Math.sqrt(travel) / Math.hypot(INTERNAL_W, INTERNAL_H)
+      const threshold = target.text ? .38 : .27
+      const longPenalty = normalized > threshold ? INTERNAL_W * INTERNAL_W * (normalized - .27) * .70 : 0
+      return travel - alphaReward + longPenalty
+    }
+
     for (const target of targets) {
+      const centerColumn = clampColumn(Math.floor(target.x / INTERNAL_W * columns))
+      const centerRow = clampRow(Math.floor(target.y / INTERNAL_H * rows))
       let best = -1
       let bestScore = Number.POSITIVE_INFINITY
-      for (let i = 0; i < sources.length; i++) {
-        if (used[i]) continue
-        const source = sources[i]!
-        const dx = source.x - target.x
-        const dy = (source.y - target.y) * verticalWeight
-        const roleBias = target.text ? INTERNAL_W * INTERNAL_W * .010 : INTERNAL_W * INTERNAL_W * .002
-        const score = dx * dx + dy * dy - source.alpha * INTERNAL_W * INTERNAL_W * .012 - roleBias
-        if (score < bestScore) { bestScore = score; best = i }
+      for (let radius = 0; radius <= maxRadius && best < 0; radius++) {
+        const minColumn = Math.max(0, centerColumn - radius), maxColumn = Math.min(columns - 1, centerColumn + radius)
+        const minRow = Math.max(0, centerRow - radius), maxRow = Math.min(rows - 1, centerRow + radius)
+        for (let row = minRow; row <= maxRow; row++) {
+          for (let column = minColumn; column <= maxColumn; column++) {
+            if (radius > 0 && column > minColumn && column < maxColumn && row > minRow && row < maxRow) continue
+            for (const candidate of buckets[row * columns + column]!) {
+              if (used[candidate]) continue
+              const source = sources[candidate]!
+              let score = scoreFor(source, target)
+              if (target.text && previousWasText && Math.abs(target.y - previousTargetY) < INTERNAL_H * .018 && !Number.isNaN(previousSourceX)) {
+                const targetMovesRight = target.x >= previousTargetX
+                const sourceMovesRight = source.x >= previousSourceX
+                if (targetMovesRight !== sourceMovesRight) score += INTERNAL_W * INTERNAL_W * .24
+              }
+              if (score < bestScore) { bestScore = score; best = candidate }
+            }
+          }
+        }
+      }
+      if (best < 0) {
+        sources.forEach((source, candidate) => {
+          if (used[candidate]) return
+          const score = scoreFor(source, target)
+          if (score < bestScore) { bestScore = score; best = candidate }
+        })
       }
       if (best < 0) break
       used[best] = 1
       assignments[best] = target
+      previousTargetX = target.x
+      previousTargetY = target.y
+      previousSourceX = sources[best]!.x
+      previousWasText = target.text
     }
     return assignments
   }
@@ -664,6 +855,11 @@ class GlyphLockRenderer {
         y += Math.cos(source.x * .008 + seed + n * 5) * INTERNAL_H * .010
     }
 
+    const semanticDistance = distanceToRect(source.x, source.y, layout.bounds.left, layout.bounds.top, layout.bounds.right, layout.bounds.bottom)
+    const influence = localInfluence(semanticDistance, INTERNAL_W * .30, this.identityFloorFor(spec.composition))
+    x = mix(source.x, x, influence)
+    y = mix(source.y, y, influence)
+
     ;[x, y] = this.warpFillerAroundBands(x, y, layout, n)
     x = Math.max(INTERNAL_W * .018, Math.min(INTERNAL_W * .982, x))
     y = Math.max(INTERNAL_H * .035, Math.min(INTERNAL_H * .975, y))
@@ -672,11 +868,20 @@ class GlyphLockRenderer {
     return {
       x, y, char,
       size: source.size * (.93 + n * .15),
-      alpha: clamp01(source.alpha * (result ? .64 : .72)),
+      alpha: clamp01(source.alpha * (result ? .70 : .78)),
       color: mixColor(spec.tint, this.event.accent, result ? .46 : .35),
       text: false,
       role: 'structure',
     }
+  }
+
+  private identityFloorFor(style: CompositionStyle): number {
+    if (style === 'core') return .38
+    if (style === 'orbital_band' || style === 'dial') return .42
+    if (style === 'architecture' || style === 'cascade') return .34
+    if (style === 'splice') return .36
+    if (style === 'field' || style === 'constellation') return .30
+    return .32
   }
 
   private warpFillerAroundBands(x: number, y: number, layout: TargetLayout, noise: number): [number, number] {
@@ -754,7 +959,8 @@ class GlyphLockRenderer {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
 
-    for (const glyph of this.morphGlyphs) {
+    for (let glyphIndex = 0; glyphIndex < this.morphGlyphs.length; glyphIndex++) {
+      const glyph = this.morphGlyphs[glyphIndex]!
       const local = smooth((reveal - glyph.delay) / Math.max(.001, glyph.duration))
       const moveT = ease(local)
       const wave = Math.sin(Math.PI * local)
@@ -852,6 +1058,17 @@ class GlyphLockRenderer {
       const finalColor = mixColor(eventColor, glyph.resultTarget.color, resultBlend)
       if (activeTarget.text && local > .88) alpha = Math.max(alpha, activeTarget.alpha * .94)
       if (alpha <= .012) continue
+
+      if (result <= .001 && glyphIndex % 5 === 0 && local > .08 && local < .92) {
+        const trailVisibility = Math.sin(Math.PI * local) * handoff * .11
+        const echoProgress = clamp01((moveT - .10) / .90)
+        const echoX = mix(glyph.source.x, eventX, echoProgress)
+        const echoY = mix(glyph.source.y, eventY, echoProgress)
+        const echoColor = mixColor(spec.tint, finalColor, .34)
+        ctx.font = `${mix(glyph.source.size, size, .46)}px ${FONT_STACK}`
+        ctx.fillStyle = `rgba(${echoColor[0]},${echoColor[1]},${echoColor[2]},${alpha * trailVisibility})`
+        ctx.fillText(glyph.source.char, echoX, echoY)
+      }
 
       ctx.font = `${size}px ${FONT_STACK}`
       const eventCharBlend = smooth((local - this.charStartFor(glyph.eventTarget.role)) / .16)
@@ -1041,7 +1258,7 @@ class GlyphLockRenderer {
     const revealT = smooth(reveal)
     const resultT = smooth(result)
     const motionNow = this.captureMotionMs ?? now
-    const baseAlpha = 1 - smooth(revealT / .58)
+    const baseAlpha = 1 - .96 * smooth(revealT / .68)
     if (baseAlpha > .001) {
       const breathing = Math.sin(motionNow / 3600 * this.motionSpec.speed) * .0016 * this.motionSpec.amplitude
       ctx.save()
