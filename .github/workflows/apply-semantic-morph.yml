@@ -1,0 +1,45 @@
+name: Apply semantic morph v0.5
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/apply-semantic-morph.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and verify semantic-morph source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/semantic-morph-source-v05.part* > /tmp/semantic-morph-source-v05.tar.xz.b64
+          base64 --decode /tmp/semantic-morph-source-v05.tar.xz.b64 > /tmp/semantic-morph-source-v05.tar.xz
+          echo "0616b5896c17cc79383696567095b1463185b14d93bf6bd1b3fa3b8dd6530e77  /tmp/semantic-morph-source-v05.tar.xz" | sha256sum --check --strict
+
+      - name: Apply morph-first implementation to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -xJf /tmp/semantic-morph-source-v05.tar.xz -C .
+          rm -rf .bootstrap
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+
+          if git diff --cached --quiet; then
+            echo "No semantic-morph changes to commit."
+            exit 0
+          fi
+
+          git commit -m "fix: morph source artwork into semantic event topology"
+          git push origin HEAD:main
