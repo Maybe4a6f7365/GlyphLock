@@ -366,6 +366,269 @@ def packet_bloom() -> Image.Image:
     return add_grain(edge_fade(composite(base,soft,detail,15)),1031,8)
 
 
+
+def event_horizon() -> Image.Image:
+    base, soft, detail, s, d = layered_canvas()
+    cx, cy = W // 2, 910
+    rng = random.Random(9102026)
+
+    # Warped star field; density increases near the lens.
+    for _ in range(420):
+        x = rng.randint(50, W - 50)
+        y = rng.randint(150, H - 150)
+        dx, dy = x - cx, y - cy
+        radius = max(1.0, math.hypot(dx, dy))
+        bend = 1.0 + 88.0 / (radius + 95.0)
+        x2 = int(cx + dx * bend)
+        y2 = int(cy + dy * bend)
+        if 35 < x2 < W - 35 and 35 < y2 < H - 35:
+            value = rng.randint(28, 118)
+            rr = 1 if value < 70 else 2
+            d.ellipse((x2 - rr, y2 - rr, x2 + rr, y2 + rr), fill=value)
+
+    # Accretion disk drawn as offset ellipses and broken hot lanes.
+    for ring in range(34):
+        r = 105 + ring * 14
+        squash = 0.28 + ring * 0.003
+        fill = min(232, 30 + ring * 5)
+        width = 1 + ring // 12
+        box = (cx - r, cy - int(r * squash), cx + r, cy + int(r * squash))
+        start = 188 + (ring * 19) % 95
+        end = 352 - (ring * 7) % 70
+        d.arc(box, start, end, fill=fill, width=width)
+        d.arc(box, 8 + ring % 11, 166 - ring % 17, fill=max(18, fill - 42), width=width)
+
+    # Photon ring and dark singularity.
+    d.ellipse((cx - 166, cy - 166, cx + 166, cy + 166), outline=188, width=8)
+    d.ellipse((cx - 124, cy - 124, cx + 124, cy + 124), outline=244, width=5)
+    s.ellipse((cx - 96, cy - 96, cx + 96, cy + 96), fill=12)
+
+    # Relativistic jets.
+    for side in (-1, 1):
+        for lane in range(13):
+            spread = lane * 7
+            start = (cx + side * spread, cy + side * 118)
+            end = (cx + side * rng.randint(-120, 120), cy + side * rng.randint(520, 1080))
+            control = (cx + side * rng.randint(-65, 65), int((start[1] + end[1]) / 2))
+            d.line(bezier(start, control, end, 58), fill=rng.randint(24, 96), width=rng.choice([1, 2, 3]))
+
+    # Lensing guides become technical scaffolding around the event.
+    for r, fill in [(260, 76), (390, 42), (560, 24), (760, 13)]:
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=fill, width=2)
+    d.line((cx, 130, cx, 2210), fill=25, width=2)
+    d.line((80, cy, W - 80, cy), fill=18, width=2)
+
+    return add_grain(edge_fade(composite(base, soft, detail, 18)), 9102026, 8)
+
+
+def tesseract_engine() -> Image.Image:
+    base, soft, detail, s, d = layered_canvas()
+    cx, cy = W // 2, 960
+
+    def projected_cube(scale: float, offset_x: float, offset_y: float, value: int, width: int) -> list[tuple[int, int]]:
+        points = []
+        for sx, sy in [(-1, -1), (1, -1), (1, 1), (-1, 1)]:
+            x = cx + offset_x + sx * scale
+            y = cy + offset_y + sy * scale * 1.35
+            points.append((int(x), int(y)))
+        d.line(points + [points[0]], fill=value, width=width, joint='curve')
+        return points
+
+    outer_a = projected_cube(375, -42, -95, 86, 5)
+    outer_b = projected_cube(375, 62, 62, 132, 6)
+    inner_a = projected_cube(205, -18, -46, 176, 6)
+    inner_b = projected_cube(205, 34, 28, 228, 7)
+
+    for first, second, value in [
+        (outer_a, outer_b, 72),
+        (inner_a, inner_b, 170),
+        (outer_a, inner_a, 54),
+        (outer_b, inner_b, 104),
+    ]:
+        for p1, p2 in zip(first, second):
+            d.line((p1, p2), fill=value, width=3)
+
+    # Repeated dimension frames and coordinate ticks.
+    for step in range(8):
+        scale = 90 + step * 58
+        dx = math.sin(step * 0.9) * 44
+        dy = math.cos(step * 0.7) * 36
+        projected_cube(scale, dx, dy, 26 + step * 17, 2 + step // 4)
+
+    for x in range(120, W - 100, 84):
+        d.line((x, 220, x, 2160), fill=13 + (x // 84) % 3 * 7, width=1)
+    for y in range(260, 2180, 82):
+        d.line((100, y, W - 100, y), fill=12 + (y // 82) % 4 * 6, width=1)
+
+    # Central transform engine.
+    s.rounded_rectangle((cx - 88, cy - 210, cx + 88, cy + 210), 35, fill=96)
+    d.rounded_rectangle((cx - 88, cy - 210, cx + 88, cy + 210), 35, outline=242, width=7)
+    d.ellipse((cx - 34, cy - 34, cx + 34, cy + 34), fill=248)
+    for a in np.linspace(0, 2 * math.pi, 16, endpoint=False):
+        p1 = polar(cx, cy, 58, a)
+        p2 = polar(cx, cy, 150, a + math.pi / 8)
+        d.line((p1, p2), fill=118, width=2)
+
+    return add_grain(edge_fade(composite(base, soft, detail, 15)), 4404, 7)
+
+
+def helix_array() -> Image.Image:
+    base, soft, detail, s, d = layered_canvas()
+    cx = W // 2
+    top, bottom = 260, 2180
+    turns = 5.6
+    samples = 240
+
+    left, right = [], []
+    for i in range(samples):
+        t = i / (samples - 1)
+        y = top + (bottom - top) * t
+        angle = turns * 2 * math.pi * t
+        envelope = 245 + 48 * math.sin(t * math.pi)
+        x1 = cx + math.sin(angle) * envelope
+        x2 = cx + math.sin(angle + math.pi) * envelope
+        left.append((int(x1), int(y)))
+        right.append((int(x2), int(y)))
+
+    d.line(left, fill=188, width=8, joint='curve')
+    d.line(right, fill=118, width=7, joint='curve')
+    for i in range(0, samples, 5):
+        value = 52 + int(148 * (0.5 + 0.5 * math.cos(i / samples * turns * 2 * math.pi)))
+        d.line((left[i], right[i]), fill=value, width=2)
+        for x, y in (left[i], right[i]):
+            rr = 3 + (i // 5) % 3
+            d.ellipse((x - rr, y - rr, x + rr, y + rr), fill=min(242, value + 50))
+
+    # Sequencing rails and telemetry ticks.
+    for offset in (-390, 390):
+        d.line((cx + offset, 230, cx + offset, 2200), fill=36, width=3)
+        for y in range(300, 2160, 58):
+            length = 18 + ((y // 58) % 5) * 7
+            d.line((cx + offset - length, y, cx + offset + length, y), fill=54 + (y // 58) % 4 * 18, width=2)
+
+    # A luminous splice at the semantic focal point.
+    cy = 1030
+    for r, fill, width in [(54, 250, 8), (116, 150, 5), (220, 68, 3), (370, 25, 2)]:
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=fill, width=width)
+    d.ellipse((cx - 18, cy - 18, cx + 18, cy + 18), fill=255)
+
+    return add_grain(edge_fade(composite(base, soft, detail, 16)), 2317, 8)
+
+
+def interference_field() -> Image.Image:
+    base, soft, detail, s, d = layered_canvas()
+    cx, cy = W // 2, 900
+
+    # Two offset wave emitters create a living moire field.
+    emitters = [(cx - 215, cy - 60), (cx + 215, cy + 58), (cx, cy + 510)]
+    for ex, ey in emitters:
+        for r in range(32, 860, 33):
+            phase = (r // 33) % 6
+            fill = 18 + phase * 15
+            d.ellipse((ex - r, ey - r, ex + r, ey + r), outline=fill, width=1 + phase // 4)
+
+    # Bright interference loci sampled analytically.
+    for y in range(220, 2190, 22):
+        for x in range(70, W - 70, 22):
+            phase = 0.0
+            for ex, ey in emitters[:2]:
+                phase += math.sin(math.hypot(x - ex, y - ey) / 22.0)
+            phase += 0.65 * math.sin(math.hypot(x - emitters[2][0], y - emitters[2][1]) / 31.0)
+            if phase > 1.62:
+                value = int(min(230, 72 + phase * 48))
+                d.rectangle((x - 1, y - 1, x + 1, y + 1), fill=value)
+
+    # Phase lock rings and axial guides.
+    for r, fill, width in [(90, 242, 7), (175, 152, 5), (300, 72, 3), (470, 33, 2)]:
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=fill, width=width)
+    d.line((cx, 140, cx, 2200), fill=28, width=2)
+    d.line((80, cy, W - 80, cy), fill=22, width=2)
+    d.ellipse((cx - 24, cy - 24, cx + 24, cy + 24), fill=255)
+
+    return add_grain(edge_fade(composite(base, soft, detail, 12)), 5150, 7)
+
+
+def cryo_vault() -> Image.Image:
+    base, soft, detail, s, d = layered_canvas()
+    cx = W // 2
+    rng = random.Random(27315)
+
+    # Hexagonal cold-storage chamber.
+    chamber = [(cx, 260), (cx + 310, 470), (cx + 310, 1710), (cx, 2020), (cx - 310, 1710), (cx - 310, 470)]
+    s.polygon(chamber, fill=38)
+    d.line(chamber + [chamber[0]], fill=156, width=8, joint='curve')
+    inner = [(cx, 365), (cx + 230, 535), (cx + 230, 1605), (cx, 1880), (cx - 230, 1605), (cx - 230, 535)]
+    d.line(inner + [inner[0]], fill=86, width=4, joint='curve')
+
+    # Cryogenic archive shelves.
+    for y in range(520, 1640, 86):
+        half = int(190 - 38 * abs((y - 1080) / 560))
+        d.line((cx - half, y, cx + half, y), fill=42 + (y // 86) % 5 * 20, width=3)
+        for x in range(cx - half + 18, cx + half, 52):
+            d.rounded_rectangle((x, y - 22, x + 34, y + 22), 5, outline=68 + (x // 52) % 4 * 18, width=2)
+
+    # Frost crystal branches around the chamber.
+    for _ in range(90):
+        x = rng.choice([rng.randint(40, 300), rng.randint(W - 300, W - 40)])
+        y = rng.randint(220, 2170)
+        length = rng.randint(30, 125)
+        side = 1 if x < cx else -1
+        d.line((x, y, x + side * length, y + rng.randint(-26, 26)), fill=rng.randint(24, 100), width=1)
+        for branch in (-1, 1):
+            bx = x + side * int(length * 0.55)
+            by = y
+            d.line((bx, by, bx + side * 24, by + branch * 24), fill=rng.randint(30, 112), width=1)
+
+    # Core vial.
+    s.rounded_rectangle((cx - 72, 690, cx + 72, 1410), 46, fill=108)
+    d.rounded_rectangle((cx - 72, 690, cx + 72, 1410), 46, outline=232, width=7)
+    for y in range(760, 1350, 44):
+        d.line((cx - 46, y, cx + 46, y), fill=62 + (y // 44) % 4 * 30, width=2)
+    d.ellipse((cx - 22, 1018, cx + 22, 1062), fill=255)
+
+    return add_grain(edge_fade(composite(base, soft, detail, 17)), 27315, 8)
+
+
+def dyson_relay() -> Image.Image:
+    base, soft, detail, s, d = layered_canvas()
+    cx, cy = W // 2, 870
+    rng = random.Random(1960)
+
+    # Segmented collector ring.
+    for r, fill, width in [(124, 250, 9), (224, 154, 6), (355, 76, 4), (540, 32, 3), (750, 14, 2)]:
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=fill, width=width)
+
+    segments = 32
+    for i in range(segments):
+        a0 = 2 * math.pi * i / segments
+        a1 = a0 + math.pi / segments * 0.72
+        inner = polar(cx, cy, 245, a0)
+        outer = polar(cx, cy, 472 + 30 * math.sin(i * 1.7), a0)
+        left = polar(cx, cy, 300, a0 - 0.035)
+        right = polar(cx, cy, 300, a1 + 0.035)
+        d.line((inner, outer), fill=72 + (i % 6) * 20, width=3)
+        d.line((left, right), fill=115 + (i % 4) * 24, width=4)
+        px, py = outer
+        d.rectangle((px - 5, py - 5, px + 5, py + 5), fill=180 + (i % 3) * 22)
+
+    # Relay beams and lower receiver architecture.
+    for i in range(18):
+        a = rng.uniform(0, 2 * math.pi)
+        start = polar(cx, cy, rng.uniform(135, 250), a)
+        end = polar(cx, cy, rng.uniform(510, 820), a + rng.uniform(-0.12, 0.12))
+        d.line((start, end), fill=rng.randint(32, 112), width=rng.choice([1, 2, 3]))
+
+    d.rounded_rectangle((cx - 150, 1240, cx + 150, 2040), 45, outline=118, width=6)
+    d.line((cx, 1120, cx, 2110), fill=176, width=5)
+    for y in range(1320, 1990, 56):
+        half = 108 + int(24 * math.sin(y / 92))
+        d.line((cx - half, y, cx + half, y), fill=36 + (y // 56) % 5 * 18, width=2)
+    s.ellipse((cx - 64, cy - 64, cx + 64, cy + 64), fill=178)
+    d.ellipse((cx - 23, cy - 23, cx + 23, cy + 23), fill=255)
+
+    return add_grain(edge_fade(composite(base, soft, detail, 18)), 1960, 8)
+
+
 def save(name: str, img: Image.Image):
     OUT_WEB.mkdir(parents=True, exist_ok=True)
     OUT_ANDROID.mkdir(parents=True, exist_ok=True)
@@ -399,6 +662,12 @@ def main():
     save("quantum_lattice", quantum_lattice())
     save("fusion_core", fusion_core())
     save("packet_bloom", packet_bloom())
+    save("event_horizon", event_horizon())
+    save("tesseract_engine", tesseract_engine())
+    save("helix_array", helix_array())
+    save("interference_field", interference_field())
+    save("cryo_vault", cryo_vault())
+    save("dyson_relay", dyson_relay())
     thumbnail()
     print("generated")
 

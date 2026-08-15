@@ -9,6 +9,12 @@ type ThemeId =
   | 'quantum_lattice'
   | 'fusion_core'
   | 'packet_bloom'
+  | 'event_horizon'
+  | 'tesseract_engine'
+  | 'helix_array'
+  | 'interference_field'
+  | 'cryo_vault'
+  | 'dyson_relay'
 type EventId = 'mail' | 'calendar' | 'github' | 'security' | 'network' | 'model'
 type MotionStyle = 'flow' | 'orbital' | 'circuit' | 'radial' | 'bloom'
 type MotionProfile = 'calm' | 'cinematic' | 'hyper'
@@ -130,6 +136,12 @@ const THEMES: ThemeSpec[] = [
   { id: 'quantum_lattice', label: 'Quantum Lattice', cavityY: 1464, palette: ' .·:~λψ∂∇∞01()<>@', tint: [196, 178, 255], atmosphereY: 910, densityBias: .008, motion: 'orbital', motionStrength: 1.08 },
   { id: 'fusion_core', label: 'Fusion Core', cavityY: 1464, palette: ' .:;=+⊙○()[]|01#@', tint: [126, 221, 250], atmosphereY: 930, densityBias: .004, motion: 'orbital', motionStrength: 1.18 },
   { id: 'packet_bloom', label: 'Packet Bloom', cavityY: 1416, palette: ' .·:;<>[]{}:/\\01TCPIP+@', tint: [166, 240, 193], atmosphereY: 990, densityBias: .012, motion: 'bloom', motionStrength: 1.05 },
+  { id: 'event_horizon', label: 'Event Horizon', cavityY: 1416, palette: ' .·:;~O0()[]<>∞λ01#@', tint: [255, 173, 112], atmosphereY: 920, densityBias: .010, motion: 'orbital', motionStrength: 1.24 },
+  { id: 'tesseract_engine', label: 'Tesseract Engine', cavityY: 1368, palette: ' .:;|+-=[]{}<>01XYZW', tint: [164, 211, 255], atmosphereY: 870, densityBias: .008, motion: 'circuit', motionStrength: 1.08 },
+  { id: 'helix_array', label: 'Helix Array', cavityY: 1464, palette: ' .·:;~ATCGλψ01/\\()[]', tint: [151, 238, 211], atmosphereY: 940, densityBias: .012, motion: 'flow', motionStrength: 1.03 },
+  { id: 'interference_field', label: 'Interference Field', cavityY: 1392, palette: ' .·:;~≈∿λψ01()<>+@', tint: [239, 176, 242], atmosphereY: 840, densityBias: .006, motion: 'radial', motionStrength: 1.12 },
+  { id: 'cryo_vault', label: 'Cryo Vault', cavityY: 1440, palette: ' .:;|[]{}HEXICE01+*', tint: [182, 232, 255], atmosphereY: 980, densityBias: .008, motion: 'circuit', motionStrength: .96 },
+  { id: 'dyson_relay', label: 'Dyson Relay', cavityY: 1416, palette: ' .·:;O0()[]{}<>01+*#@', tint: [255, 214, 140], atmosphereY: 860, densityBias: .010, motion: 'orbital', motionStrength: 1.14 },
 ]
 
 const THEME_BY_ID = new Map(THEMES.map(theme => [theme.id, theme] as const))
