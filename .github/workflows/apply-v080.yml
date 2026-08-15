@@ -1,0 +1,50 @@
+name: Apply GlyphLock v0.8 visual systems
+
+on:
+  push:
+    branches:
+      - feature/visual-systems-v08
+    paths:
+      - .github/workflows/apply-v080.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/v080.patch.xz.b64.part* > /tmp/glyphlock-v080.patch.xz.b64
+          echo "bcffc667038072aa4ddeba81c7a660c183c215ba1791ba13cc874a1cedc433d5  /tmp/glyphlock-v080.patch.xz.b64" | sha256sum --check --strict
+          base64 --decode /tmp/glyphlock-v080.patch.xz.b64 > /tmp/glyphlock-v080.patch.xz
+          echo "c669fed7342b5a78d72f1e29886ce2fa5aa3224d0e704229de0731eb4d77dd43  /tmp/glyphlock-v080.patch.xz" | sha256sum --check --strict
+          xz --decompress --stdout /tmp/glyphlock-v080.patch.xz > /tmp/glyphlock-v080.patch
+          echo "c2e0805cbb77e9d997f8a3a5610ffc3c4199efacd7f8492c16275e67698ab363  /tmp/glyphlock-v080.patch" | sha256sum --check --strict
+
+      - name: Apply and commit v0.8
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check /tmp/glyphlock-v080.patch
+          git apply --index /tmp/glyphlock-v080.patch
+          rm -rf .bootstrap
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+
+          if git diff --cached --quiet; then
+            echo "No v0.8 changes to commit."
+            exit 0
+          fi
+
+          git commit -m "feat: add coherent transport and v0.8 signature systems"
+          git push origin HEAD:feature/visual-systems-v08
