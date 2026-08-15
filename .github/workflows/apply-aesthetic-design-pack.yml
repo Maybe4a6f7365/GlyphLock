@@ -34,7 +34,13 @@ jobs:
         run: |
           set -euo pipefail
           python /tmp/apply_aesthetic_design_pack_v06.py
+
+          # GitHub's workflow token may update source but not workflow files.
+          # Keep CI unchanged here; the authenticated connector updates it after
+          # the source commit lands.
+          git checkout HEAD -- .github/workflows/ci.yml
           rm -rf .bootstrap
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --all
