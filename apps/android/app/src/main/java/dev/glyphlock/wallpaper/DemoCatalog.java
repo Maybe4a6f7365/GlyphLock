@@ -57,6 +57,36 @@ public final class DemoCatalog {
                 "Packet Bloom", R.drawable.scene_packet_bloom, 0.59f,
                 ".:;<>[]{}:/\\01TCPIP+@", 1.21f, Color.rgb(166, 240, 193), 0.50f, 0.41f,
                 MotionStyle.BLOOM, 1.05f
+        ),
+        EVENT_HORIZON(
+                "Event Horizon", R.drawable.scene_event_horizon, 0.59f,
+                ".:;~O0()[]<>∞λ01#@", 1.24f, Color.rgb(255, 173, 112), 0.50f, 0.38f,
+                MotionStyle.ORBITAL, 1.24f
+        ),
+        TESSERACT_ENGINE(
+                "Tesseract Engine", R.drawable.scene_tesseract_engine, 0.57f,
+                ".:;|+-=[]{}<>01XYZW", 1.22f, Color.rgb(164, 211, 255), 0.50f, 0.36f,
+                MotionStyle.CIRCUIT, 1.08f
+        ),
+        HELIX_ARRAY(
+                "Helix Array", R.drawable.scene_helix_array, 0.61f,
+                ".:;~ATCGλψ01/\\()[]", 1.19f, Color.rgb(151, 238, 211), 0.50f, 0.39f,
+                MotionStyle.FLOW, 1.03f
+        ),
+        INTERFERENCE_FIELD(
+                "Interference Field", R.drawable.scene_interference_field, 0.58f,
+                ".:;~≈∿λψ01()<>+@", 1.18f, Color.rgb(239, 176, 242), 0.50f, 0.35f,
+                MotionStyle.RADIAL, 1.12f
+        ),
+        CRYO_VAULT(
+                "Cryo Vault", R.drawable.scene_cryo_vault, 0.60f,
+                ".:;|[]{}HEXICE01+*", 1.20f, Color.rgb(182, 232, 255), 0.50f, 0.41f,
+                MotionStyle.CIRCUIT, 0.96f
+        ),
+        DYSON_RELAY(
+                "Dyson Relay", R.drawable.scene_dyson_relay, 0.59f,
+                ".:;O0()[]{}<>01+*#@", 1.23f, Color.rgb(255, 214, 140), 0.50f, 0.36f,
+                MotionStyle.ORBITAL, 1.14f
         );
 
         public final String label;
