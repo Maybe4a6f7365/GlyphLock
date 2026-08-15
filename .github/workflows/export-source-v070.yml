@@ -1,0 +1,33 @@
+name: Export source for v0.7 review
+
+on:
+  push:
+    branches:
+      - feature/morph-quality-v070
+    paths:
+      - .github/workflows/export-source-v070.yml
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package repository source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='**/build' \
+            --exclude='apps/visual-lab/dist' \
+            -cJf /tmp/glyphlock-v060-source.tar.xz .
+          sha256sum /tmp/glyphlock-v060-source.tar.xz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: glyphlock-v060-source
+          path: /tmp/glyphlock-v060-source.tar.xz
+          if-no-files-found: error
