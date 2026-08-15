@@ -22,7 +22,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .bootstrap/v080.patch.xz.b64.part* > /tmp/glyphlock-v080.patch.xz.b64
+          cat .bootstrap/v080.patch.xz.b64.part* | tr -d '\r\n\t ' > /tmp/glyphlock-v080.patch.xz.b64
           base64 --decode /tmp/glyphlock-v080.patch.xz.b64 > /tmp/glyphlock-v080.patch.xz
           echo "c669fed7342b5a78d72f1e29886ce2fa5aa3224d0e704229de0731eb4d77dd43  /tmp/glyphlock-v080.patch.xz" | sha256sum --check --strict
           xz --decompress --stdout /tmp/glyphlock-v080.patch.xz > /tmp/glyphlock-v080.patch
