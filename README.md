@@ -1,12 +1,32 @@
-# GlyphLock — Prototype 0.3 Motion Art Pack
+# GlyphLock — Prototype 0.5 Semantic Morph
 
-A private Android live-wallpaper experiment in which high-density glyph artwork continuously moves, then reorganizes itself into concise, event-shaped information.
+A private Android live-wallpaper experiment in which a high-density glyph artwork continuously moves and then **turns its own body into event language**.
 
-**This repository intentionally contains no Hermes integration, no connectors, no network client, no microphone permission, no notification-listener permission, and no account permissions.** Prototype 0 exists to answer the visual question first: _is the wallpaper beautiful and alive enough to deserve a permanent place on the lock screen?_
+**This repository intentionally contains no Hermes integration, connectors, network client, microphone permission, notification-listener permission, or account permissions.** Prototype 0 exists to answer the visual question first: _is the wallpaper beautiful and alive enough to deserve a permanent place on the lock screen?_
 
 ![GlyphLock transformation](docs/media/transform.gif)
 
-The new cinematic motion pack is generated and captured by the visual-lab tooling; CI publishes the complete interactive build as an artifact.
+## v0.5 correction: the event is the transformed artwork
+
+Earlier prototypes still used an event bitmap and a dark readability cavity. Even though glyph particles moved toward the information, the final composition could read as a background plus an overlay. That architecture has been removed.
+
+Prototype 0.5 has one semantic material:
+
+```text
+AMBIENT ART GLYPHS
+        ↓
+PERSISTENT MORPH TOPOLOGY
+        ↓
+EVENT TITLE + SUMMARY + STRUCTURE
+        ↓
+RESULT LANGUAGE
+        ↓
+THE SAME AMBIENT ART GLYPHS
+```
+
+The event renderer now creates **no event bitmap, notification card, or black cavity**. A representative topology of up to 2,300 actual source glyphs receives event and result targets. During reveal those glyphs move from their original coordinates, change character, resize, recolor, clear their own readable region, and settle into the event.
+
+The user must be able to watch the wallpaper becoming the information.
 
 ## What is implemented
 
@@ -20,58 +40,60 @@ The new cinematic motion pack is generated and captured by the visual-lab toolin
   - **Fusion Core** — tokamak/reactor telemetry form.
   - **Packet Bloom** — radial network-routing flower.
 - Six local nerd-tech demo events: important email, calendar collision, recovered deployment, TLS certificate rotation, WireGuard packet loss, and model-run convergence.
-- Continuous ambient glyph movement instead of a static ASCII image.
+- Continuous ambient glyph motion.
 - Five motion grammars: **flow**, **orbital**, **circuit**, **radial**, and **bloom**.
-- A wake ripple that travels through the glyph field when the wallpaper becomes visible.
-- Artwork-to-information morphing rather than notification cards over a wallpaper.
-- Theme-specific source-to-language paths: curved orbital migration, orthogonal circuit stepping, radial convergence, petal-like bloom, and flowing waves.
-- Android `WallpaperService` implementation.
-- Full-screen Android preview using the same scene renderer.
+- A wake ripple when the wallpaper becomes visible.
+- Morph-first event composition using the original source glyphs.
+- Spatial source-to-target assignment so the transformation remains coherent.
+- Displacement-based readability: surrounding art moves around the event instead of being covered by a dark panel.
+- Fragmented technical rails assembled from the same source topology.
+- Android `WallpaperService` and a full-screen preview using the same renderer.
 - Tap, long-hold, horizontal swipe, and upward-collapse interaction grammar.
-- Simulated listening and simulated result states.
-- Browser visual laboratory with **Calm**, **Cinematic**, and **Hyper** motion profiles.
-- Deterministic capture hooks for visual regression and motion review.
+- A listening pressure wave that deforms the current glyph topology instead of displaying a waveform widget.
+- Event-to-result glyph morphing.
 - Local-only immutable fixtures; the app requests no runtime permissions.
 
 ## Product boundary
 
-Prototype 0 remains deliberately narrow:
-
 ```text
 LOCAL DEMO EVENT
       ↓
-SEMANTIC VISUAL STATE
+EVENT TARGET GLYPHS
       ↓
-THEME-SPECIFIC MOTION GRAMMAR
+SOURCE-TO-TARGET ASSIGNMENT
       ↓
-GLYPH SCENE + TEXT GEOMETRY
+THEME-SPECIFIC TOPOLOGY MORPH
       ↓
 LIVE WALLPAPER / PREVIEW
 ```
 
-Hermes will be introduced only after the visual gate passes. No placeholder agent SDK has been added, so the rendering architecture cannot quietly become coupled to a backend before it is ready.
+Hermes will be introduced only after the morph-first visual gate passes. No placeholder agent SDK is present.
 
 ## Motion behavior
 
-The resting wallpaper is not frozen. A bounded live subset of the dense glyph field breathes, orbits, routes, pulses, or blooms according to the selected theme. The majority of the field remains stable so the scene keeps its detail and does not become visual noise.
+The resting wallpaper is not frozen. A bounded live subset breathes, orbits, routes, pulses, or blooms according to the selected theme, while the dense raster preserves visual detail.
 
-When the screen becomes visible:
+When the screen becomes visible or an event is focused:
 
-1. A radial wake pulse travels through the artwork.
-2. The selected event begins resolving from the field after the configured delay.
-3. Glyphs migrate in staggered spatial bands rather than exploding simultaneously.
-4. The final text state becomes calm and readable while the surrounding structure retains restrained motion.
-5. Dismissal returns the same characters to the artwork.
+1. A wake pulse travels through the source artwork.
+2. The dense ambient raster hands off to persistent source glyphs.
+3. Those same glyphs move in staggered spatial bands.
+4. Some become the exact characters of the title, summary, metadata, and action hint.
+5. Every remaining morph glyph folds around the readable region and preserves the wallpaper's structural DNA.
+6. Text glyphs settle; transformed decorative glyphs retain restrained movement.
+7. Holding the interaction area sends a pressure wave through the same topology.
+8. The result reorganizes the event glyphs again.
+9. Dismissal reverses the topology into the source art.
 
-See [Motion system](docs/MOTION_SYSTEM.md) and [Visual grammar](docs/VISUAL_GRAMMAR.md).
+See [Morph-first architecture](docs/MORPH_FIRST_ARCHITECTURE.md), [Motion system](docs/MOTION_SYSTEM.md), and [Visual grammar](docs/VISUAL_GRAMMAR.md).
 
 ## Android interaction
 
-- **Wallpaper becomes visible:** wake ripple and optional automatic reveal of the selected fixture.
-- **Tap lower area:** reveal/focus the current event.
-- **Hold lower area:** simulate event-bound voice interaction, then show a local result.
+- **Wallpaper becomes visible:** wake ripple and optional automatic morph of the selected fixture.
+- **Tap lower area:** morph the artwork into the current event.
+- **Hold lower area:** deform the focused event into listening state, then morph into a local result.
 - **Swipe left/right:** change fixture event.
-- **Swipe up:** return the information to the artwork.
+- **Swipe up:** reverse the event topology into the ambient artwork.
 
 Wallpaper touch delivery varies by launcher and OEM. The interactive preview is the reliable evaluation surface; the wallpaper uses the same best-effort gestures.
 
@@ -81,7 +103,7 @@ Wallpaper touch delivery varies by launcher and OEM. The interactive preview is 
 apps/android/       Native Android live wallpaper and preview
 apps/visual-lab/    TypeScript/Canvas visual and motion laboratory
 scripts/            Procedural masks and deterministic capture tooling
-docs/               Motion grammar, architecture, and acceptance gate
+docs/               Morph grammar, architecture, and acceptance gate
 .github/workflows/  Reproducible CI build
 ```
 
@@ -97,14 +119,6 @@ npm run serve
 ```
 
 Open `http://localhost:4173`.
-
-Create a single-file interactive build with:
-
-```bash
-python scripts/build_standalone_visual_lab.py --output GlyphLock-Visual-Lab.html
-```
-
-The laboratory uses a small text-layout adapter with the same conceptual boundary as Pretext (`prepare` then `layout`). The actual Pretext dependency remains deferred until the visual direction is approved; this keeps the visual proof dependency-light and leaves room to compare Pretext with native Android shaping later.
 
 ## Build the Android app
 
@@ -127,29 +141,29 @@ The debug APK is produced at:
 apps/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The GitHub workflow provisions Gradle and the Android SDK, regenerates all procedural scene masks, and uploads the debug APK as an artifact.
+GitHub Actions regenerates the procedural masks, runs unit tests and lint, assembles the APK, and uploads it as an artifact.
 
-## Design review gate
+## Morph-first design gate
 
-Do not begin Hermes integration until the following are true:
+Do not begin Hermes integration until all are true:
 
-1. The resting artwork is desirable with all event functionality disabled.
-2. The ambient movement feels alive without looking like a screensaver.
-3. The transformation reads as one artwork changing state, not a notification overlay.
-4. The final event state is readable in under two seconds.
-5. The motion remains coherent on a physical Android device.
-6. The wallpaper stops rendering when hidden.
-7. At least one scene is strong enough to serve as the project hero image without explanation.
-
-See [Prototype 0 acceptance criteria](docs/PROTOTYPE_0.md).
+1. The resting art is desirable with events disabled.
+2. The event can only be explained as the artwork changing state.
+3. Removing event glyphs would visibly remove part of the transformed artwork itself.
+4. No event bitmap, card, cavity, or background panel is rendered.
+5. Most promoted source glyphs visibly participate in the transformation.
+6. The final event is readable in under two seconds after settling.
+7. Collapse reverses the topology rather than crossfading to another composition.
+8. The motion remains coherent on a physical Android device.
+9. The wallpaper stops rendering when hidden.
 
 ## Generated artwork
 
-All eight masks are original procedural assets generated by `scripts/generate_scene_masks.py`. The external references informed the desired density, fluidity, and level of detail, but their imagery is not included or traced in this repository.
+All masks are original procedural assets generated by `scripts/generate_scene_masks.py`. External references informed the desired density, fluidity, and level of detail; their imagery is not included or traced.
 
 ## Status
 
-- Browser visual and motion proof: **built and captured**
-- Android motion renderer: **implemented**
+- Morph-first Android renderer: **implemented in v0.5**
+- Event/result overlays: **removed**
 - Android APK: **built by CI or a local Android SDK**
 - Hermes: **explicitly deferred**

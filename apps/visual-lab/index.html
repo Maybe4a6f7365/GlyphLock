@@ -4,11 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#030405" />
-    <title>GlyphLock Visual Lab</title>
+    <title>GlyphLock Semantic Morph Lab</title>
   </head>
   <body>
     <main id="app">
-      <section class="stage" aria-label="GlyphLock wallpaper prototype">
+      <section class="stage" aria-label="GlyphLock morph-first wallpaper prototype">
         <canvas id="glyph-canvas"></canvas>
         <div class="phone-glass" aria-hidden="true"></div>
         <div class="safe-clock" aria-hidden="true">
@@ -22,7 +22,7 @@
       <aside class="controls" id="controls">
         <div class="brand">
           <strong>GLYPHLOCK</strong>
-          <span>visual proof · local demo events</span>
+          <span>semantic morph · no event overlay</span>
         </div>
         <div class="control-group">
           <label>Artwork</label>
@@ -37,11 +37,11 @@
           <div class="event-list" id="event-controls"></div>
         </div>
         <div class="control-group compact">
-          <button id="play-reveal">Wake + reveal</button>
-          <button id="collapse">Return to art</button>
+          <button id="play-reveal">Morph art into event</button>
+          <button id="collapse">Reverse into art</button>
         </div>
         <p class="instructions">
-          Tap the lower command zone to focus. Hold it to simulate voice. Swipe left/right to change events, or press the arrow keys.
+          The event is made from the wallpaper's own glyphs. Tap the lower command zone to morph, hold it to deform the same topology into listening state, swipe left/right to change events, or swipe up to reverse the morph.
         </p>
       </aside>
     </main>

@@ -83,7 +83,8 @@ final class ExperienceController {
             case AMBIENT:
                 break;
             case REVEALING: {
-                float raw = (nowMs - stateStartedAtMs) / 1850f;
+                // The art-to-language topology change must be visible, not hidden by a fast fade.
+                float raw = (nowMs - stateStartedAtMs) / 2450f;
                 reveal = GlyphMath.clamp01(raw);
                 transition = reveal < 1f;
                 if (!transition) state = State.FOCUSED;
@@ -96,7 +97,7 @@ final class ExperienceController {
                 reveal = 1f;
                 listening = true;
                 transition = true;
-                if (nowMs - stateStartedAtMs >= 1650L) {
+                if (nowMs - stateStartedAtMs >= 1850L) {
                     state = State.RESULT_TRANSITION;
                     stateStartedAtMs = nowMs;
                     listening = false;
@@ -105,7 +106,7 @@ final class ExperienceController {
             }
             case RESULT_TRANSITION: {
                 reveal = 1f;
-                result = GlyphMath.clamp01((nowMs - stateStartedAtMs) / 1000f);
+                result = GlyphMath.clamp01((nowMs - stateStartedAtMs) / 1350f);
                 transition = result < 1f;
                 if (!transition) state = State.RESULT;
                 break;
@@ -115,7 +116,7 @@ final class ExperienceController {
                 result = 1f;
                 break;
             case COLLAPSING: {
-                reveal = 1f - GlyphMath.clamp01((nowMs - stateStartedAtMs) / 1350f);
+                reveal = 1f - GlyphMath.clamp01((nowMs - stateStartedAtMs) / 1900f);
                 transition = reveal > 0f;
                 if (!transition) state = State.AMBIENT;
                 break;
@@ -126,7 +127,12 @@ final class ExperienceController {
                 ? 1f
                 : GlyphMath.clamp01((nowMs - wakeStartedAtMs) / 2200f);
         boolean wakeAnimating = wake < 1f;
-        boolean animate = transition || listening || wakeAnimating || state == State.AMBIENT || state == State.FOCUSED || state == State.RESULT;
+        boolean animate = transition
+                || listening
+                || wakeAnimating
+                || state == State.AMBIENT
+                || state == State.FOCUSED
+                || state == State.RESULT;
         int delay = transition || listening || wakeAnimating ? 16 : 33;
 
         return new Frame(
