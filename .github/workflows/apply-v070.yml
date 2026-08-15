@@ -22,6 +22,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The repair chunks replace the accidentally staged legacy part01.
           cat \
             .bootstrap/glyphlock-v070-source.tar.xz.b64.part00 \
             .bootstrap/glyphlock-v070-source.tar.xz.b64.part01a \
