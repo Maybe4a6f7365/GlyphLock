@@ -55,11 +55,11 @@ public class ExperienceControllerTest {
     }
 
     @Test
-    public void frameBudgetDropsAfterBriefOperationalTail() {
+    public void frameBudgetKeepsAmbientAliveAndFreezesFocusedCopy() {
         ExperienceController controller = new ExperienceController();
         ExperienceController.Frame ambient = controller.frame(10_000L);
-        assertEquals(1000, ambient.frameDelayMs);
-        assertTrue(!ambient.needsAnimation);
+        assertEquals(125, ambient.frameDelayMs);
+        assertTrue(ambient.needsAnimation);
 
         controller.reveal(10_000L);
         ExperienceController.Frame revealing = controller.frame(10_300L);
@@ -74,6 +74,21 @@ public class ExperienceControllerTest {
         ExperienceController.Frame focused = controller.frame(19_301L);
         assertEquals(1000, focused.frameDelayMs);
         assertTrue(!focused.needsAnimation);
+    }
+
+    @Test
+    public void wakeBurstReturnsToEightFpsAmbientCadence() {
+        ExperienceController controller = new ExperienceController();
+        controller.wake(20_000L);
+
+        ExperienceController.Frame waking = controller.frame(20_200L);
+        ExperienceController.Frame settled = controller.frame(22_300L);
+
+        assertEquals(33, waking.frameDelayMs);
+        assertTrue(waking.needsAnimation);
+        assertEquals(125, settled.frameDelayMs);
+        assertTrue(settled.needsAnimation);
+        assertEquals(ExperienceController.State.AMBIENT, settled.state);
     }
 
 }

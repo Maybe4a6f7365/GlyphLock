@@ -79,8 +79,10 @@ screen-safe bounds, dynamically select a readable size, split unusually long tok
 all accepted event content instead of cutting the last line off. Filler glyphs move only where they
 collide with exact semantic strokes; the surrounding topology remains intact.
 
-No event `Bitmap`, font-outline bitmap, text canvas, ordinary character target line, or global
-reading cavity is created.
+No persistent or rendered event `Bitmap`, text canvas, ordinary character target line, or global
+reading cavity is created. A renderer may reuse a private, compile-only font-stroke sampler to turn
+letter shapes into destination coordinates, but its pixels are cleared after sampling and never
+composited into a frame; only retained source glyphs are drawn.
 
 ## Successive events
 

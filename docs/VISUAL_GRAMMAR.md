@@ -59,6 +59,25 @@ scan, and analysis planes resolve measurements.
 - **Wave:** phase displacement travelling across the field.
 - **Fold:** multi-axis architectural folding.
 
+## Fluidity without a backdrop
+
+Fluidity belongs to the source glyph topology. It is never a separate video, liquid bitmap, or
+full-screen color wash behind the art.
+
+- **Slow scale:** neighboring glyphs share a coherent curl so the hero silhouette appears to
+  breathe and stream as one material.
+- **Medium scale:** a narrow energy band moves through the silhouette, carrying hue and luminance
+  rather than moving the focal point.
+- **Fast scale:** deterministic scan tears briefly offset a sparse edge subset; landmarks and
+  high-value contours receive much less displacement.
+- **Depth scale:** faint lagging source-glyph echoes appear only where motion is measurable.
+- **Color scale:** an authored tint travels through cyan/violet companions into sparse white-hot
+  cores while black remains the dominant field.
+- **Semantic handoff:** ambient ribbon echoes disappear during reveal. Readable macro-glyph strokes
+  become perfectly stationary; only non-text system structure retains a restrained current.
+- **Scheduling:** Android ambient motion runs at a restrained 8 fps only while the surface is visible.
+  Transitions keep their 30 fps budget and focused reading states freeze after the operational tail.
+
 ## Composition grammars
 
 See [Semantic compositions v0.7](SEMANTIC_COMPOSITIONS_V07.md).

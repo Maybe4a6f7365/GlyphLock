@@ -18,7 +18,8 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install -r scripts/requirements.txt
-      - run: python scripts/generate_scene_masks.py --jobs 3 --compress-level 6
+      - run: python scripts/generate_scene_masks.py --jobs 2 --compress-level 6
+      - run: python scripts/generate_scene_masks.py --validate-only
       - run: python scripts/check_morph_first.py
       - run: python scripts/check_theme_catalog.py
       - run: python scripts/check_semantic_composition.py
@@ -48,7 +49,8 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install -r scripts/requirements.txt
-      - run: python scripts/generate_scene_masks.py --jobs 3 --compress-level 6
+      - run: python scripts/generate_scene_masks.py --jobs 2 --compress-level 6
+      - run: python scripts/generate_scene_masks.py --validate-only
       - run: python scripts/check_morph_first.py
       - run: python scripts/check_theme_catalog.py
       - run: python scripts/check_semantic_composition.py

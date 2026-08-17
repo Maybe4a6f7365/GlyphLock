@@ -160,12 +160,17 @@ final class ExperienceController {
                 ? 1f
                 : GlyphMath.clamp01((nowMs - wakeStartedAtMs) / 2200f);
         boolean wakeAnimating = wake < 1f;
-        // Stable wallpaper states are deliberately static. A perpetual redraw loop competes
-        // with the launcher and lock screen even when the user cannot perceive useful motion.
-        boolean animate = transition || listening || wakeAnimating || operationalMotion;
+        // Ambient art remains gently alive while the wallpaper surface is visible. The engine
+        // owns visibility scheduling, so this 8 fps branch stops when the launcher/lock screen
+        // is hidden. Focused semantic states still freeze after their brief operational tail.
+        boolean ambientMotion = state == State.AMBIENT;
+        boolean animate = transition || listening || wakeAnimating || operationalMotion
+                || ambientMotion;
         int delay;
         if (transition || listening || wakeAnimating) {
             delay = 33; // A consistent 30 fps transition budget is smooth and battery-safe.
+        } else if (ambientMotion) {
+            delay = 125; // Bounded 8 fps idle cadence; hero contours remain anchored.
         } else if (operationalMotion) {
             delay = 66; // Brief 15 fps system-life tail; stable text never moves.
         } else {

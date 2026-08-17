@@ -15,6 +15,21 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT_WEB = ROOT / "apps" / "visual-lab" / "public" / "assets"
 OUT_ANDROID = ROOT / "apps" / "android" / "app" / "src" / "main" / "res" / "drawable-nodpi"
 W, H = 1080, 2400
+BLACK_CUTOFF = 10
+GRAIN_DILATION = 15
+ACTIVE_CUTOFF = 20
+CLOCK_SAFE_BOUNDS = (
+    round(W * 0.135),
+    0,
+    round(W * 0.865),
+    round(H * 0.130),
+)
+GESTURE_SAFE_BOUNDS = (
+    round(W * 0.055),
+    round(H * 0.925),
+    round(W * 0.945),
+    H,
+)
 
 
 def bezier(a, c, b, n=40):
@@ -30,15 +45,37 @@ def bezier(a, c, b, n=40):
 
 
 def add_grain(img: Image.Image, seed: int, amount: int = 11) -> Image.Image:
+    """Add organic grain only around artwork and preserve literal black elsewhere."""
+    if img.size != (W, H):
+        raise ValueError(f"expected {(W, H)} mask, received {img.size}")
+    active = img.point(lambda value: 255 if value >= BLACK_CUTOFF else 0)
+    # Gaussian support expansion is separable and substantially cheaper than a
+    # large MaxFilter at 1080x2400; thresholding restores a binary dilation.
+    support = active.filter(ImageFilter.GaussianBlur(GRAIN_DILATION / 3))
+    support = support.point(lambda value: 255 if value > 0 else 0)
+    bounds = support.getbbox()
+    if bounds is None:
+        return Image.new("L", (W, H), 0)
+
     rng = np.random.default_rng(seed)
-    arr = np.asarray(img, dtype=np.int16)
+    crop = img.crop(bounds)
+    support_arr = np.asarray(support.crop(bounds), dtype=np.uint8) > 0
+    arr = np.asarray(crop, dtype=np.int16).copy()
     noise = rng.normal(0, amount, arr.shape).astype(np.int16)
     # Organic low-frequency density drift.
-    small = rng.integers(0, 256, (60, 27), dtype=np.uint8)
-    low = Image.fromarray(small, "L").resize((W, H), Image.Resampling.BICUBIC).filter(ImageFilter.GaussianBlur(28))
+    crop_w, crop_h = crop.size
+    low_h = max(4, round(60 * crop_h / H))
+    low_w = max(4, round(27 * crop_w / W))
+    small = rng.integers(0, 256, (low_h, low_w), dtype=np.uint8)
+    low = Image.fromarray(small, "L").resize(crop.size, Image.Resampling.BICUBIC).filter(ImageFilter.GaussianBlur(28))
     low_arr = np.asarray(low, dtype=np.int16) - 128
-    arr = np.clip(arr + noise + low_arr // 10, 0, 255).astype(np.uint8)
-    return Image.fromarray(arr, "L")
+    arr[support_arr] += noise[support_arr] + low_arr[support_arr] // 10
+    arr[~support_arr] = 0
+    arr = np.clip(arr, 0, 255)
+    arr[arr < BLACK_CUTOFF] = 0
+    result = Image.new("L", (W, H), 0)
+    result.paste(Image.fromarray(arr.astype(np.uint8), "L"), bounds[:2])
+    return result
 
 
 def layered_canvas():
@@ -52,6 +89,236 @@ def composite(base, soft, detail, blur=14):
     soft = soft.filter(ImageFilter.GaussianBlur(blur))
     base = ImageChops.lighter(base, soft)
     return ImageChops.lighter(base, detail)
+
+
+def _max_translated(
+    destination: np.ndarray,
+    source: np.ndarray,
+    selected: np.ndarray,
+    dx: int,
+    dy: int,
+    alpha: float,
+) -> None:
+    """Composite selected translated pixels without allocating a full-size copy."""
+    src_x0 = max(0, -dx)
+    src_x1 = min(source.shape[1], source.shape[1] - dx)
+    src_y0 = max(0, -dy)
+    src_y1 = min(source.shape[0], source.shape[0] - dy)
+    if src_x1 <= src_x0 or src_y1 <= src_y0:
+        return
+    dst_x0 = src_x0 + dx
+    dst_x1 = src_x1 + dx
+    dst_y0 = src_y0 + dy
+    dst_y1 = src_y1 + dy
+    source_slice = source[src_y0:src_y1, src_x0:src_x1]
+    selected_slice = selected[src_y0:src_y1, src_x0:src_x1]
+    candidate = np.where(selected_slice, source_slice * alpha, 0.0)
+    target = destination[dst_y0:dst_y1, dst_x0:dst_x1]
+    np.maximum(target, candidate, out=target)
+
+
+def glitch_dissolve(
+    img: Image.Image,
+    seed: int,
+    *,
+    amount: float = 0.34,
+    core_threshold: int = 150,
+    edge_radius: float = 8.0,
+    block_size: tuple[int, int] = (42, 12),
+    scan_height: int = 7,
+    direction: tuple[float, float] = (1.0, 0.18),
+    fragment_shift: int = 28,
+) -> Image.Image:
+    """Break weak contours into deterministic scan blocks while retaining bright mass.
+
+    Fragment probability is driven primarily by a blurred edge gradient, with a
+    smaller bias toward weak luminance.  Thick, bright regions survive as visual
+    landmarks; removed edge pieces are re-emitted down the supplied direction so
+    the dissolve reads as motion rather than random erosion.
+    """
+    if img.size != (W, H):
+        raise ValueError(f"expected {(W, H)} mask, received {img.size}")
+    amount = float(np.clip(amount, 0.0, 1.0))
+    block_w = max(4, int(block_size[0]))
+    block_h = max(3, int(block_size[1]))
+    scan_height = max(2, int(scan_height))
+    rng = np.random.default_rng(seed)
+
+    active_mask = img.point(lambda value: 255 if value > 7 else 0)
+    active_bounds = active_mask.getbbox()
+    if active_bounds is None:
+        return img.copy()
+    padding = max(block_w, fragment_shift + 4, math.ceil(edge_radius * 4))
+    left = max(0, active_bounds[0] - padding)
+    top = max(0, active_bounds[1] - padding)
+    right = min(W, active_bounds[2] + padding)
+    bottom = min(H, active_bounds[3] + padding)
+    bounds = (left, top, right, bottom)
+    crop = img.crop(bounds)
+    crop_w, crop_h = crop.size
+
+    # Work only within the padded artwork bounds. The former full-canvas float
+    # fields multiplied peak memory when three scene workers ran concurrently.
+    arr = np.asarray(crop, dtype=np.float32)
+    smooth = np.asarray(
+        crop.filter(ImageFilter.GaussianBlur(max(0.5, edge_radius))),
+        dtype=np.float32,
+    )
+    grad_y, edge = np.gradient(smooth)
+    np.hypot(edge, grad_y, out=edge)
+    del grad_y
+    active = arr > 7.0
+    scale = max(1.0, float(np.percentile(edge[active], 88)))
+    edge /= scale
+    np.clip(edge, 0.0, 1.0, out=edge)
+    smooth /= max(1.0, float(core_threshold))
+    np.clip(smooth, 0.0, 1.0, out=smooth)
+
+    # A coarse 2-D field creates rectangular breaks; a shallow 1-D field turns
+    # some of those breaks into scanline runs without making every row uniform.
+    grid_h = math.ceil(crop_h / block_h)
+    grid_w = math.ceil(crop_w / block_w)
+    coarse = rng.integers(0, 256, (grid_h, grid_w), dtype=np.uint8)
+    trigger = np.asarray(
+        Image.fromarray(coarse, "L").resize(crop.size, Image.Resampling.NEAREST),
+        dtype=np.float32,
+    )
+    trigger *= 0.78 / 255.0
+    scan = rng.integers(0, 256, (math.ceil(crop_h / scan_height), 1), dtype=np.uint8)
+    scanlines = np.asarray(
+        Image.fromarray(scan, "L").resize(crop.size, Image.Resampling.NEAREST),
+        dtype=np.float32,
+    )
+    trigger += scanlines * (0.22 / 255.0)
+    del scanlines
+
+    # Reuse the gradient and normalized blur buffers for probability and
+    # weakness instead of retaining separate full-resolution float arrays.
+    edge *= 0.70
+    smooth *= -0.22
+    smooth += 0.22
+    edge += smooth
+    edge += 0.08
+    edge *= amount
+    # Protect only genuinely thick bright areas. Thin bright contours still have
+    # a low neighbourhood average and are allowed to fracture at their edges.
+    protected_core = (arr >= core_threshold) & (smooth <= 0.22 * (1.0 - 0.72))
+    removed = active & ~protected_core & (trigger < edge)
+
+    dissolved = arr.copy()
+    dissolved[removed] *= 0.10
+    vector_length = max(1e-6, math.hypot(direction[0], direction[1]))
+    ux, uy = direction[0] / vector_length, direction[1] / vector_length
+    for fraction, alpha in ((0.55, 0.42), (1.0, 0.25)):
+        dx = int(round(ux * fragment_shift * fraction))
+        dy = int(round(uy * fragment_shift * fraction))
+        _max_translated(dissolved, arr, removed, dx, dy, alpha)
+
+    result = img.copy()
+    result.paste(Image.fromarray(np.uint8(np.clip(dissolved, 0, 255)), "L"), bounds[:2])
+    return result
+
+
+def add_directional_wake(
+    img: Image.Image,
+    seed: int,
+    start: tuple[int, int],
+    control: tuple[int, int],
+    end: tuple[int, int],
+    *,
+    count: int = 54,
+    spread: float = 54.0,
+    length_range: tuple[int, int] = (18, 92),
+    value_range: tuple[int, int] = (24, 112),
+    width_range: tuple[int, int] = (1, 3),
+) -> Image.Image:
+    """Add sparse tapered fragments along a quadratic ribbon trajectory."""
+    if img.size != (W, H):
+        raise ValueError(f"expected {(W, H)} mask, received {img.size}")
+    rng = random.Random(seed)
+    wake = Image.new("L", (W, H), 0)
+    glow = Image.new("L", (W, H), 0)
+    d = ImageDraw.Draw(wake)
+    g = ImageDraw.Draw(glow)
+    minimum_length, maximum_length = sorted(length_range)
+    minimum_value, maximum_value = sorted(value_range)
+    minimum_width, maximum_width = sorted(width_range)
+
+    for index in range(max(0, count)):
+        # Stratified jitter leaves intentional gaps while avoiding accidental
+        # clusters that would turn the wake into another solid band.
+        t = np.clip((index + rng.random()) / max(1, count), 0.0, 1.0)
+        u = 1.0 - t
+        x = u*u*start[0] + 2*u*t*control[0] + t*t*end[0]
+        y = u*u*start[1] + 2*u*t*control[1] + t*t*end[1]
+        tx = 2*u*(control[0] - start[0]) + 2*t*(end[0] - control[0])
+        ty = 2*u*(control[1] - start[1]) + 2*t*(end[1] - control[1])
+        tangent_length = max(1e-6, math.hypot(tx, ty))
+        tx, ty = tx / tangent_length, ty / tangent_length
+        nx, ny = -ty, tx
+        lane_spread = spread * (0.32 + 0.68 * t)
+        offset = rng.gauss(0.0, lane_spread * 0.42)
+        x += nx * offset + tx * rng.uniform(-10.0, 10.0)
+        y += ny * offset + ty * rng.uniform(-10.0, 10.0)
+
+        segment_length = rng.randint(minimum_length, maximum_length) * (0.58 + t * 0.70)
+        angle_jitter = rng.uniform(-0.20, 0.20)
+        ca, sa = math.cos(angle_jitter), math.sin(angle_jitter)
+        dx = (tx * ca - ty * sa) * segment_length
+        dy = (tx * sa + ty * ca) * segment_length
+        x0, y0 = int(x - dx * 0.36), int(y - dy * 0.36)
+        x1, y1 = int(x + dx * 0.64), int(y + dy * 0.64)
+        value = int(rng.randint(minimum_value, maximum_value) * (1.0 - t * 0.42))
+        width = rng.randint(minimum_width, maximum_width)
+        d.line((x0, y0, x1, y1), fill=max(10, value), width=width)
+        g.line((x0, y0, x1, y1), fill=max(5, value // 4), width=width + 4)
+        if rng.random() < 0.30:
+            radius = rng.randint(2, 6)
+            d.rectangle((int(x)-radius, int(y)-radius, int(x)+radius, int(y)+radius), fill=min(190, value + 28))
+
+    glow = glow.filter(ImageFilter.GaussianBlur(5))
+    return ImageChops.lighter(img, ImageChops.lighter(glow, wake))
+
+
+def carve_quiet_zones(
+    img: Image.Image,
+    zones: list[tuple[str, tuple[int, int, int, int], float, float]] | None = None,
+    *,
+    preserve_safe_areas: bool = True,
+) -> Image.Image:
+    """Attenuate seeded composition zones after grain so black remains quiet."""
+    if img.size != (W, H):
+        raise ValueError(f"expected {(W, H)} mask, received {img.size}")
+    all_zones: list[tuple[str, tuple[int, int, int, int], float, float]] = []
+    if preserve_safe_areas:
+        # Central clock and bottom gesture/navigation regions.
+        all_zones.extend([
+            ("rounded", (145, -100, W - 145, 305), 0.94, 72.0),
+            ("rounded", (60, H - 175, W - 60, H + 80), 0.92, 58.0),
+        ])
+    all_zones.extend(zones or [])
+
+    attenuation = Image.new("L", (W, H), 255)
+    for shape, bounds, strength, feather in all_zones:
+        cut = Image.new("L", (W, H), 0)
+        draw = ImageDraw.Draw(cut)
+        fill = int(round(np.clip(strength, 0.0, 1.0) * 255))
+        if shape == "ellipse":
+            draw.ellipse(bounds, fill=fill)
+        elif shape == "rect":
+            draw.rectangle(bounds, fill=fill)
+        elif shape == "rounded":
+            radius = max(18, min(130, int(min(abs(bounds[2]-bounds[0]), abs(bounds[3]-bounds[1])) * 0.22)))
+            draw.rounded_rectangle(bounds, radius=radius, fill=fill)
+        else:
+            raise ValueError(f"unknown quiet-zone shape {shape!r}")
+        if feather > 0:
+            cut = cut.filter(ImageFilter.GaussianBlur(feather))
+        attenuation = ImageChops.multiply(attenuation, ImageChops.invert(cut))
+    result = ImageChops.multiply(img, attenuation)
+    # This helper runs after grain on flagship compositions, so attenuation must
+    # not reintroduce near-black values that bypass the shared true-black gate.
+    return result.point(lambda value: 0 if value < BLACK_CUTOFF else value)
 
 
 def sentinel() -> Image.Image:
@@ -76,8 +343,8 @@ def sentinel() -> Image.Image:
     # Feather curves.
     for side in (-1, 1):
         root = (cx + side * 58, 610)
-        for i in range(24):
-            p = i / 23
+        for i in range(16):
+            p = i / 15
             end_x = cx + side * int(230 + 325 * (math.sin(math.pi * (0.08 + 0.82*p)) ** 0.75))
             end_y = int(330 + 1110 * p)
             control = (cx + side * int(170 + 230 * math.sin(math.pi*p)), int(380 + 650*p))
@@ -122,7 +389,29 @@ def sentinel() -> Image.Image:
     edge = np.minimum.reduce([xx / 150.0, (W - 1 - xx) / 150.0, yy / 180.0, (H - 1 - yy) / 180.0])
     fade = np.clip(edge, 0.30, 1.0)
     img = Image.fromarray(np.uint8(np.clip(arr * fade, 0, 255)), "L")
-    return add_grain(img, 1337, 9)
+    img = glitch_dissolve(
+        img, 13371, amount=.40, core_threshold=138, edge_radius=7,
+        block_size=(40, 11), scan_height=6, direction=(.58, 1.0), fragment_shift=34,
+    )
+    # Broken wing lanes and a single asymmetric body wake give the static mask a
+    # clear direction while leaving the head and torso as stable landmarks.
+    img = add_directional_wake(
+        img, 13372, (490, 650), (270, 510), (42, 1200),
+        count=34, spread=48, length_range=(20, 105), value_range=(26, 122),
+    )
+    img = add_directional_wake(
+        img, 13373, (590, 720), (810, 660), (1018, 1390),
+        count=29, spread=42, length_range=(18, 96), value_range=(24, 108),
+    )
+    img = add_directional_wake(
+        img, 13374, (650, 1080), (710, 1560), (870, 2130),
+        count=24, spread=38, length_range=(16, 74), value_range=(20, 82),
+    )
+    img = add_grain(img, 1337, 9)
+    return carve_quiet_zones(img, [
+        ("ellipse", (-390, 930, 300, 2440), .78, 105),
+        ("ellipse", (785, 870, 1480, 2440), .74, 105),
+    ])
 
 
 def moth() -> Image.Image:
@@ -145,8 +434,8 @@ def moth() -> Image.Image:
     # Veins and eye spots.
     for side in (-1, 1):
         root = (cx+side*24, 885)
-        for i in range(17):
-            p = i/16
+        for i in range(12):
+            p = i/11
             end = (cx+side*int(230+290*math.sin(math.pi*(.05+.9*p))), int(390+1270*p))
             ctrl = (cx+side*int(160+230*p), int(610+620*p))
             d.line(bezier(root, ctrl, end, 42), fill=int(82+68*math.sin(math.pi*p)), width=4, joint="curve")
@@ -165,7 +454,27 @@ def moth() -> Image.Image:
     d.line(bezier((560,650),(660,360),(780,430),50), fill=180, width=6, joint="curve")
 
     img = composite(base, soft, detail, blur=16)
-    return add_grain(img, 2204, 10)
+    img = glitch_dissolve(
+        img, 22041, amount=.43, core_threshold=140, edge_radius=6,
+        block_size=(46, 10), scan_height=6, direction=(-.34, 1.0), fragment_shift=30,
+    )
+    img = add_directional_wake(
+        img, 22042, (500, 860), (270, 650), (45, 1240),
+        count=35, spread=52, length_range=(18, 96), value_range=(24, 114),
+    )
+    img = add_directional_wake(
+        img, 22043, (580, 920), (815, 825), (1035, 1510),
+        count=28, spread=46, length_range=(16, 88), value_range=(22, 102),
+    )
+    img = add_directional_wake(
+        img, 22044, (510, 1370), (430, 1720), (315, 2070),
+        count=20, spread=34, length_range=(14, 70), value_range=(18, 76),
+    )
+    img = add_grain(img, 2204, 10)
+    return carve_quiet_zones(img, [
+        ("ellipse", (-330, 1640, 370, 2490), .76, 95),
+        ("ellipse", (710, 1590, 1410, 2490), .82, 95),
+    ])
 
 
 def orbit() -> Image.Image:
@@ -522,33 +831,58 @@ def interference_field() -> Image.Image:
     base, soft, detail, s, d = layered_canvas()
     cx, cy = W // 2, 900
 
-    # Two offset wave emitters create a living moire field.
-    emitters = [(cx - 215, cy - 60), (cx + 215, cy + 58), (cx, cy + 510)]
-    for ex, ey in emitters:
-        for r in range(32, 860, 33):
-            phase = (r // 33) % 6
-            fill = 18 + phase * 15
-            d.ellipse((ex - r, ey - r, ex + r, ey + r), outline=fill, width=1 + phase // 4)
+    # Two offset emitters retain the interference identity, but broken arcs leave
+    # broad nulls instead of coating the entire canvas with complete circles.
+    emitters = [(cx - 205, cy - 52), (cx + 220, cy + 72)]
+    for emitter_index, (ex, ey) in enumerate(emitters):
+        for ring, r in enumerate(range(48, 690, 47)):
+            phase = ring % 6
+            fill = 18 + phase * 14
+            width = 1 + phase // 4
+            box = (ex - r, ey - r, ex + r, ey + r)
+            offset = (ring * 19 + emitter_index * 43) % 46
+            d.arc(box, 192 + offset // 4, 326 + offset // 3, fill=fill, width=width)
+            d.arc(box, 12 + offset // 5, 126 + offset // 4, fill=max(12, fill - 10), width=width)
 
-    # Bright interference loci sampled analytically.
-    for y in range(220, 2190, 22):
+    # Bright loci are restricted to two crossing directional corridors.
+    for y in range(260, 2100, 22):
         for x in range(70, W - 70, 22):
             phase = 0.0
-            for ex, ey in emitters[:2]:
+            for ex, ey in emitters:
                 phase += math.sin(math.hypot(x - ex, y - ey) / 22.0)
-            phase += 0.65 * math.sin(math.hypot(x - emitters[2][0], y - emitters[2][1]) / 31.0)
-            if phase > 1.62:
+            diagonal_a = abs(y - (390 + x * .92))
+            diagonal_b = abs(y - (1550 - x * .78))
+            corridor = min(diagonal_a, diagonal_b)
+            if phase > 1.47 and corridor < 285:
                 value = int(min(230, 72 + phase * 48))
                 d.rectangle((x - 1, y - 1, x + 1, y + 1), fill=value)
 
-    # Phase lock rings and axial guides.
-    for r, fill, width in [(90, 242, 7), (175, 152, 5), (300, 72, 3), (470, 33, 2)]:
-        d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=fill, width=width)
-    d.line((cx, 140, cx, 2200), fill=28, width=2)
-    d.line((80, cy, W - 80, cy), fill=22, width=2)
+    # A stable phase-lock core anchors the field; secondary rings are incomplete.
+    d.ellipse((cx - 92, cy - 92, cx + 92, cy + 92), outline=242, width=7)
+    d.arc((cx - 190, cy - 190, cx + 190, cy + 190), 198, 356, fill=150, width=5)
+    d.arc((cx - 315, cy - 315, cx + 315, cy + 315), 16, 168, fill=65, width=3)
+    d.line((cx - 330, cy + 300, cx + 350, cy - 280), fill=30, width=2)
     d.ellipse((cx - 24, cy - 24, cx + 24, cy + 24), fill=255)
 
-    return add_grain(edge_fade(composite(base, soft, detail, 12)), 5150, 7)
+    img = edge_fade(composite(base, soft, detail, 12))
+    img = glitch_dissolve(
+        img, 51501, amount=.46, core_threshold=188, edge_radius=5,
+        block_size=(52, 9), scan_height=5, direction=(1.0, .24), fragment_shift=38,
+    )
+    img = add_directional_wake(
+        img, 51502, (90, 430), (490, 665), (1030, 1340),
+        count=58, spread=72, length_range=(20, 118), value_range=(22, 106),
+    )
+    img = add_directional_wake(
+        img, 51503, (35, 1550), (520, 1110), (1045, 520),
+        count=52, spread=64, length_range=(18, 106), value_range=(20, 96),
+    )
+    img = add_grain(img, 5150, 7)
+    return carve_quiet_zones(img, [
+        ("ellipse", (-420, 1090, 455, 2520), .88, 125),
+        ("ellipse", (650, -230, 1450, 690), .84, 105),
+        ("rounded", (20, 1760, 420, 2290), .72, 90),
+    ])
 
 
 def cryo_vault() -> Image.Image:
@@ -959,11 +1293,20 @@ def lagrange_garden() -> Image.Image:
 
     return add_grain(edge_fade(composite(base, soft, detail, 16)), 515151, 8)
 
+
 def save(name: str, img: Image.Image, compress_level: int = 6):
     OUT_WEB.mkdir(parents=True, exist_ok=True)
     OUT_ANDROID.mkdir(parents=True, exist_ok=True)
-    img.save(OUT_WEB / f"scene_{name}.png", compress_level=compress_level)
-    img.save(OUT_ANDROID / f"scene_{name}.png", compress_level=compress_level)
+    for path in (
+        OUT_WEB / f"scene_{name}.png",
+        OUT_ANDROID / f"scene_{name}.png",
+    ):
+        temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        try:
+            img.save(temporary, format="PNG", compress_level=compress_level)
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 SCENES = {
@@ -990,9 +1333,122 @@ SCENES = {
 }
 
 
-def render_and_save(name: str, compress_level: int) -> str:
-    save(name, SCENES[name](), compress_level=compress_level)
-    return name
+DEFAULT_VALIDATION_LIMITS = {
+    "min_black_ratio": 0.58,
+    "min_quiet_ratio": 0.60,
+    "min_active_ratio": 0.025,
+    "max_clock_active_ratio": 0.040,
+    "max_gesture_active_ratio": 0.025,
+    "min_peak": 180,
+}
+
+# The flagship figure silhouettes deliberately carry more contiguous mass than
+# the technical line systems. Recursive Monolith's source pillar intentionally
+# enters the clock region, while Interference Field is deliberately sparse.
+VALIDATION_OVERRIDES = {
+    "sentinel": {
+        "min_black_ratio": 0.50,
+        "min_quiet_ratio": 0.50,
+        "max_gesture_active_ratio": 0.050,
+    },
+    "moth": {
+        "min_black_ratio": 0.54,
+        "min_quiet_ratio": 0.54,
+    },
+    "recursive_monolith": {
+        "min_black_ratio": 0.50,
+        "min_quiet_ratio": 0.50,
+        "max_clock_active_ratio": 0.150,
+    },
+    "interference_field": {
+        "min_active_ratio": 0.015,
+    },
+}
+
+
+def mask_metrics(img: Image.Image) -> dict[str, float]:
+    """Return fixed, inexpensive composition metrics for a generated mask."""
+    if img.mode != "L" or img.size != (W, H):
+        raise ValueError(
+            f"expected L/{W}x{H} mask, "
+            f"received {img.mode}/{img.size[0]}x{img.size[1]}"
+        )
+    arr = np.asarray(img, dtype=np.uint8)
+    clock = arr[
+        CLOCK_SAFE_BOUNDS[1]:CLOCK_SAFE_BOUNDS[3],
+        CLOCK_SAFE_BOUNDS[0]:CLOCK_SAFE_BOUNDS[2],
+    ]
+    gesture = arr[
+        GESTURE_SAFE_BOUNDS[1]:GESTURE_SAFE_BOUNDS[3],
+        GESTURE_SAFE_BOUNDS[0]:GESTURE_SAFE_BOUNDS[2],
+    ]
+    return {
+        "black_ratio": float(np.mean(arr == 0)),
+        "quiet_ratio": float(np.mean(arr <= BLACK_CUTOFF)),
+        "active_ratio": float(np.mean(arr > ACTIVE_CUTOFF)),
+        "clock_active_ratio": float(np.mean(clock > ACTIVE_CUTOFF)),
+        "gesture_active_ratio": float(np.mean(gesture > ACTIVE_CUTOFF)),
+        "peak": float(arr.max()),
+    }
+
+
+def validate_mask(name: str, img: Image.Image) -> dict[str, float]:
+    """Fail deterministically when a mask loses black space or usable sources."""
+    metrics = mask_metrics(img)
+    limits = DEFAULT_VALIDATION_LIMITS | VALIDATION_OVERRIDES.get(name, {})
+    failures: list[str] = []
+    for metric, limit_name in (
+        ("black_ratio", "min_black_ratio"),
+        ("quiet_ratio", "min_quiet_ratio"),
+        ("active_ratio", "min_active_ratio"),
+        ("peak", "min_peak"),
+    ):
+        if metrics[metric] < limits[limit_name]:
+            failures.append(f"{metric}={metrics[metric]:.4f} < {limits[limit_name]:.4f}")
+    for metric, limit_name in (
+        ("clock_active_ratio", "max_clock_active_ratio"),
+        ("gesture_active_ratio", "max_gesture_active_ratio"),
+    ):
+        if metrics[metric] > limits[limit_name]:
+            failures.append(f"{metric}={metrics[metric]:.4f} > {limits[limit_name]:.4f}")
+    if failures:
+        raise ValueError(f"{name} mask validation failed: " + "; ".join(failures))
+    return metrics
+
+
+def format_metrics(metrics: dict[str, float]) -> str:
+    return (
+        f"black={metrics['black_ratio']:.3f} "
+        f"quiet={metrics['quiet_ratio']:.3f} "
+        f"active={metrics['active_ratio']:.3f} "
+        f"clock={metrics['clock_active_ratio']:.3f} "
+        f"gesture={metrics['gesture_active_ratio']:.3f} "
+        f"peak={metrics['peak']:.0f}"
+    )
+
+
+def render_and_save(name: str, compress_level: int) -> tuple[str, dict[str, float]]:
+    img = SCENES[name]()
+    metrics = validate_mask(name, img)
+    save(name, img, compress_level=compress_level)
+    return name, metrics
+
+
+def validate_saved(name: str) -> tuple[str, dict[str, float]]:
+    web_path = OUT_WEB / f"scene_{name}.png"
+    android_path = OUT_ANDROID / f"scene_{name}.png"
+    for path in (web_path, android_path):
+        if not path.exists():
+            raise FileNotFoundError(f"missing generated mask: {path.relative_to(ROOT)}")
+    with Image.open(web_path) as source:
+        source.load()
+        metrics = validate_mask(name, source)
+    with Image.open(android_path) as source:
+        source.load()
+        validate_mask(name, source)
+    if web_path.read_bytes() != android_path.read_bytes():
+        raise ValueError(f"{name} web and Android masks are not byte-identical")
+    return name, metrics
 
 
 def thumbnail(compress_level: int = 6):
@@ -1035,12 +1491,20 @@ def parse_selection(values: list[str] | None) -> list[str]:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--only', action='append', help='scene name or comma-separated scene names')
-    parser.add_argument('--jobs', type=int, default=min(3, max(1, os.cpu_count() or 1)))
+    parser.add_argument('--jobs', type=int, default=min(2, max(1, os.cpu_count() or 1)))
     parser.add_argument('--skip-existing', action='store_true')
+    parser.add_argument('--validate-only', action='store_true', help='validate saved masks without regenerating')
     parser.add_argument('--compress-level', type=int, default=6, choices=range(0, 10))
     args = parser.parse_args()
 
     selected = parse_selection(args.only)
+    if args.validate_only:
+        for name in selected:
+            validated_name, metrics = validate_saved(name)
+            print(f"validated {validated_name} {format_metrics(metrics)}", flush=True)
+        print(f"validated {len(selected)} scene(s)")
+        return
+
     if args.skip_existing:
         selected = [
             name for name in selected
@@ -1050,8 +1514,8 @@ def main():
 
     if args.jobs <= 1 or len(selected) <= 1:
         for name in selected:
-            render_and_save(name, args.compress_level)
-            print(f"generated {name}", flush=True)
+            rendered_name, metrics = render_and_save(name, args.compress_level)
+            print(f"generated {rendered_name} {format_metrics(metrics)}", flush=True)
     else:
         with ProcessPoolExecutor(max_workers=min(args.jobs, len(selected))) as executor:
             futures = {
@@ -1059,7 +1523,8 @@ def main():
                 for name in selected
             }
             for future in as_completed(futures):
-                print(f"generated {future.result()}", flush=True)
+                rendered_name, metrics = future.result()
+                print(f"generated {rendered_name} {format_metrics(metrics)}", flush=True)
 
     thumbnail(args.compress_level)
     print(f"generated {len(selected)} scene(s)")

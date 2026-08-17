@@ -52,6 +52,22 @@ interface GlyphPoint {
 interface AmbientGlyph extends GlyphPoint {
   phase: number
   depth: number
+  edgeMobility: number
+  energyCoordinate: number
+  palettePhase: number
+  glitchEligible: boolean
+  glitchDirection: number
+  glitchJitter: number
+  echoPrimary: boolean
+  echoSecondary: boolean
+  glowEligible: boolean
+}
+
+interface RibbonGlyph extends GlyphPoint {
+  phase: number
+  depth: number
+  lane: number
+  atmosphereEligible: boolean
 }
 
 interface TargetGlyph {
@@ -76,6 +92,11 @@ interface TargetLayout {
   bounds: { left: number; top: number; right: number; bottom: number }
   centerX: number
   centerY: number
+}
+
+interface FittedLines {
+  lines: string[]
+  size: number
 }
 
 interface MorphGlyph {
@@ -180,6 +201,9 @@ const MOTION_PROFILES: Record<MotionProfile, { label: string; speed: number; amp
 const INTERNAL_W = 1080
 const INTERNAL_H = 2400
 const GLYPH_STEP = 10
+const MASK_BLACK_CUTOFF = 10 / 255
+const MAX_RIBBON_GLYPHS = 420
+const MAX_MORPH_SOURCE_COUNT = Math.max(...Object.values(MOTION_PROFILES).map(profile => profile.morphCount))
 const RAMP = '  .·,:;+i1tfLCG08@'
 const BASE_GLYPHS = ' .·,:;+=x1I|/\\()[]{}<>#08@'
 const STRUCTURE_GLYPHS = '·.:;|/\\+−=[]{}<>01'
@@ -211,6 +235,49 @@ const mixColor = (a: [number, number, number], b: [number, number, number], t: n
   Math.round(mix(a[2], b[2], t)),
 ]
 
+type Rgb = [number, number, number]
+
+interface DerivedPalette {
+  primary: Rgb
+  secondary: Rgb
+  tertiary: Rgb
+  core: Rgb
+}
+
+// Every scene keeps one authored tint. The companion neon colors are derived so
+// the twenty-theme catalog stays compact and future themes inherit the same depth.
+const derivePalette = (primary: Rgb, accent: Rgb = primary): DerivedPalette => {
+  const bridge = mixColor(primary, accent, .18)
+  const secondary: Rgb = [
+    Math.round(mix(bridge[0], 255, .18)),
+    Math.round(mix(bridge[1], 72, .58)),
+    Math.round(mix(bridge[2], 255, .66)),
+  ]
+  const tertiary: Rgb = [
+    Math.round(mix(bridge[0], 70, .55)),
+    Math.round(mix(bridge[1], 220, .55)),
+    Math.round(mix(bridge[2], 255, .55)),
+  ]
+  return {
+    primary,
+    secondary,
+    tertiary,
+    core: mixColor(tertiary, [255, 255, 255], .58),
+  }
+}
+
+const writeMixedColor = (out: Rgb, a: Rgb, b: Rgb, t: number): void => {
+  out[0] = Math.round(mix(a[0], b[0], t))
+  out[1] = Math.round(mix(a[1], b[1], t))
+  out[2] = Math.round(mix(a[2], b[2], t))
+}
+
+const writePaletteColor = (out: Rgb, palette: DerivedPalette, phase: number): void => {
+  const t = ((phase % 1) + 1) % 1
+  if (t < .5) writeMixedColor(out, palette.primary, palette.secondary, smooth(t * 2))
+  else writeMixedColor(out, palette.secondary, palette.tertiary, smooth((t - .5) * 2))
+}
+
 class GlyphLockRenderer {
   readonly canvas: HTMLCanvasElement
   readonly ctx: CanvasRenderingContext2D
@@ -224,9 +291,22 @@ class GlyphLockRenderer {
   private maskCanvas = document.createElement('canvas')
   private maskCtx = this.maskCanvas.getContext('2d', { willReadFrequently: true })!
   private baseCanvas = document.createElement('canvas')
+  // Compile-only font-stroke sampler. Its pixels become target coordinates;
+  // this surface is never composited into the wallpaper renderer.
+  private readonly semanticStrokeSamplerCtx = (() => {
+    const sampler = document.createElement('canvas')
+    sampler.width = INTERNAL_W
+    sampler.height = INTERNAL_H
+    const context = sampler.getContext('2d', { willReadFrequently: true })
+    if (!context) throw new Error('Semantic stroke sampler is unavailable')
+    return context
+  })()
   private basePoints: GlyphPoint[] = []
   private ambientGlyphs: AmbientGlyph[] = []
+  private ribbonGlyphs: RibbonGlyph[] = []
   private morphGlyphs: MorphGlyph[] = []
+  private themePalette = derivePalette(THEMES[0]!.tint)
+  private semanticPalette = derivePalette(THEMES[0]!.tint, EVENTS[0]!.accent)
   private motionProfile: MotionProfile = 'cinematic'
   private wakeStart = performance.now()
   private pointerParallax = { x: 0, y: 0 }
@@ -255,6 +335,11 @@ class GlyphLockRenderer {
   private get motionSpec() { return MOTION_PROFILES[this.motionProfile] }
   private get event() { return EVENTS[this.eventIndex]! }
 
+  private refreshPalettes(): void {
+    this.themePalette = derivePalette(this.themeSpec.tint)
+    this.semanticPalette = derivePalette(this.themeSpec.tint, this.event.accent)
+  }
+
   async load(): Promise<void> {
     await Promise.all(THEMES.map(async ({ id }) => {
       const image = new Image()
@@ -272,6 +357,7 @@ class GlyphLockRenderer {
     if (id === this.theme) return
     this.theme = id
     this.state = 'ambient'
+    this.refreshPalettes()
     this.rebuildScene()
     this.wake()
   }
@@ -289,12 +375,14 @@ class GlyphLockRenderer {
     const index = EVENTS.findIndex(event => event.id === id)
     if (index < 0 || index === this.eventIndex) return
     this.eventIndex = index
+    this.refreshPalettes()
     this.rebuildTopology()
     this.reveal()
   }
 
   nextEvent(direction = 1): void {
     this.eventIndex = (this.eventIndex + direction + EVENTS.length) % EVENTS.length
+    this.refreshPalettes()
     this.rebuildTopology()
     this.reveal()
     syncControls(this.theme, this.event.id)
@@ -341,6 +429,7 @@ class GlyphLockRenderer {
     this.maskCtx.clearRect(0, 0, INTERNAL_W, INTERNAL_H)
     this.maskCtx.drawImage(image, 0, 0, INTERNAL_W, INTERNAL_H)
     this.basePoints = this.extractGlyphPoints()
+    this.appendStructuralSourceRails()
     this.renderBaseBitmap()
     this.rebuildAmbientGlyphs()
     this.rebuildTopology()
@@ -353,16 +442,32 @@ class GlyphLockRenderer {
     for (let i = 0; i < count; i++) {
       const point = candidates[(i * 97 + this.theme.length * 53) % Math.max(1, candidates.length)]
       if (!point) continue
-      glyphs.push({ ...point, phase: hash(i, point.x, point.y) * Math.PI * 2, depth: .25 + .75 * hash(point.y, i, 11) })
+      const phase = hash(i, point.x, point.y) * Math.PI * 2
+      glyphs.push({
+        ...point,
+        phase,
+        depth: .25 + .75 * hash(point.y, i, 11),
+        edgeMobility: .34 + .66 * (1 - point.alpha),
+        energyCoordinate: point.y + point.x * .24,
+        palettePhase: phase / (Math.PI * 2) * .31 + point.x / INTERNAL_W * .18 + point.y / INTERNAL_H * .11,
+        glitchEligible: hash(point.x, point.y, 91) > .973,
+        glitchDirection: hash(point.y, point.x, 103) > .5 ? 1 : -1,
+        glitchJitter: hash(point.x, point.y, 107) - .5,
+        echoPrimary: hash(i, point.x, 191) > .835,
+        echoSecondary: hash(i, point.y, 193) > .945,
+        glowEligible: hash(point.x, i, 197) > .89,
+      })
     }
     this.ambientGlyphs = glyphs
   }
 
   private rebuildTopology(): void {
-    if (this.basePoints.length === 0) return
+    const strokeSamplerCtx = this.semanticStrokeSamplerCtx
+    const eventLayout = this.buildTargetLayout(false, strokeSamplerCtx)
+    const resultLayout = this.buildTargetLayout(true, strokeSamplerCtx)
     const sources = this.selectMorphSources()
-    const eventLayout = this.buildTargetLayout(false)
-    const resultLayout = this.buildTargetLayout(true)
+    this.rebuildRibbonGlyphs()
+    if (sources.length === 0) return
     const eventAssignments = this.assignCoherentTargets(sources, eventLayout.targets)
     const resultAssignments = this.assignCoherentTargets(sources, resultLayout.targets)
     const focusX = INTERNAL_W / 2
@@ -370,8 +475,16 @@ class GlyphLockRenderer {
     const diagonal = Math.hypot(INTERNAL_W, INTERNAL_H)
 
     this.morphGlyphs = sources.map((source, index) => {
-      const eventTarget = eventAssignments[index] ?? this.buildFillerTarget(source, eventLayout, index, false)
-      const resultTarget = resultAssignments[index] ?? this.buildFillerTarget(source, resultLayout, index, true)
+      const assignedEvent = eventAssignments[index]
+      const assignedResult = resultAssignments[index]
+      const eventTarget = this.withSourceChar(
+        assignedEvent ?? this.buildFillerTarget(source, eventLayout, index, false),
+        source,
+      )
+      const resultTarget = this.withSourceChar(
+        assignedResult ?? this.buildFillerTarget(source, resultLayout, index, true),
+        source,
+      )
       const distance = Math.hypot(source.x - focusX, source.y - focusY) / diagonal
       const n = hash(index, source.x, source.y)
       return {
@@ -386,6 +499,10 @@ class GlyphLockRenderer {
     })
   }
 
+  private withSourceChar(target: TargetGlyph, source: GlyphPoint): TargetGlyph {
+    return { ...target, char: source.char }
+  }
+
   private roleDelay(role: TargetRole): number {
     if (role === 'title') return 0
     if (role === 'summary') return .026
@@ -397,10 +514,14 @@ class GlyphLockRenderer {
   private selectMorphSources(): GlyphPoint[] {
     const candidates = this.basePoints.filter(point => point.alpha > .15)
     if (candidates.length === 0) candidates.push(...this.basePoints)
-    const count = Math.min(this.motionSpec.morphCount, candidates.length)
+    const count = Math.min(this.motionSpec.morphCount, MAX_MORPH_SOURCE_COUNT)
     const selected: GlyphPoint[] = []
+    // A loaded scene has already been padded to the hard topology limit. An
+    // empty/partial pre-load scene should wait for rebuildScene instead of
+    // changing its source cardinality.
+    if (candidates.length < count) return selected
     const used = new Uint8Array(candidates.length)
-    let cursor = (this.theme.length * 149) % Math.max(1, candidates.length)
+    let cursor = (this.theme.length * 149) % candidates.length
     for (let i = 0; i < count; i++) {
       cursor = (cursor + 97) % candidates.length
       while (used[cursor]) cursor = (cursor + 1) % candidates.length
@@ -410,7 +531,79 @@ class GlyphLockRenderer {
     return selected
   }
 
-  private buildTargetLayout(result: boolean): TargetLayout {
+  private appendStructuralSourceRails(): void {
+    const available = this.basePoints.reduce((count, point) => count + (point.alpha > .15 ? 1 : 0), 0)
+    const count = Math.max(0, MAX_MORPH_SOURCE_COUNT - available)
+    if (count === 0) return
+    const clockSafeBottom = INTERNAL_H * .15
+    const gestureSafeTop = INTERNAL_H * .91
+    const top = clockSafeBottom
+    const bottom = gestureSafeTop
+    const left = INTERNAL_W * .035
+    const right = INTERNAL_W * .965
+    const width = right - left, height = bottom - top
+    const vocabulary = this.themeSpec.palette + STRUCTURE_GLYPHS
+    const themeIndex = Math.max(0, THEMES.findIndex(theme => theme.id === this.theme))
+    const seed = (themeIndex + 1) * .071
+    const railCount = Math.max(8, Math.min(20, Math.ceil(count / 150)))
+    const pointsPerRail = Math.ceil(count / railCount)
+    for (let index = 0; index < count; index++) {
+      const rail = index % railCount
+      const step = Math.floor(index / railCount)
+      const t = pointsPerRail <= 1 ? .5 : step / (pointsPerRail - 1)
+      const n = hash(index, themeIndex, 163)
+      const railU = (rail + .5) / railCount
+      const baseX = left + railU * width
+      const curl = Math.sin(t * Math.PI * (2.2 + rail % 4 * .38) + seed * 19 + rail * .63) * INTERNAL_W * (.018 + (rail % 3) * .006)
+      const crossCurl = Math.cos(t * Math.PI * 5.4 - seed * 11 + rail) * INTERNAL_W * .008
+      const x = Math.max(left, Math.min(right, baseX + curl + crossCurl))
+      const y = top + t * height
+      const char = vocabulary[Math.min(vocabulary.length - 1, Math.floor(n * vocabulary.length))] ?? '·'
+      this.basePoints.push({ x, y, char, alpha: .155 + n * .095, size: 8.2 + n * 2.4 })
+    }
+  }
+
+  private rebuildRibbonGlyphs(): void {
+    const candidates: Array<{ point: GlyphPoint; lane: number; score: number; order: number }> = []
+    for (let pointIndex = 0; pointIndex < this.basePoints.length; pointIndex++) {
+      const point = this.basePoints[pointIndex]!
+      if (point.alpha < .16) continue
+      const normalizedX = point.x / INTERNAL_W
+      let nearestLane = 0
+      let nearestDistance = Number.POSITIVE_INFINITY
+      for (let lane = 0; lane < 3; lane++) {
+        const laneOffset = (lane - 1) * INTERNAL_H * .15
+        const ribbonY = this.themeSpec.atmosphereY + laneOffset
+          + Math.sin(normalizedX * Math.PI * (2.10 + lane * .32) + lane * 1.7) * INTERNAL_H * (.030 + lane * .006)
+          + Math.sin(normalizedX * Math.PI * 5.2 + lane) * INTERNAL_H * .010
+        const distance = Math.abs(point.y - ribbonY)
+        if (distance < nearestDistance) { nearestDistance = distance; nearestLane = lane }
+      }
+      if (nearestDistance > 132) continue
+      const order = Math.floor(normalizedX * 24) * 3 + nearestLane
+      const score = nearestDistance - point.alpha * 58 + hash(point.x, point.y, 171) * 18
+      candidates.push({ point, lane: nearestLane, score, order })
+    }
+    candidates.sort((a, b) => a.order - b.order || a.score - b.score)
+    const selected: RibbonGlyph[] = []
+    const bucketUse = new Uint16Array(72)
+    for (const candidate of candidates) {
+      if (selected.length >= MAX_RIBBON_GLYPHS) break
+      if (bucketUse[candidate.order]! >= 6) continue
+      bucketUse[candidate.order]! += 1
+      const point = candidate.point
+      selected.push({
+        ...point,
+        lane: candidate.lane,
+        phase: hash(point.x, point.y, 173) * Math.PI * 2,
+        depth: .30 + hash(point.y, point.x, 179) * .70,
+        atmosphereEligible: hash(point.x, point.y, candidate.lane + 57) >= .28,
+      })
+    }
+    this.ribbonGlyphs = selected
+  }
+
+  private buildTargetLayout(result: boolean, strokeSamplerCtx: CanvasRenderingContext2D): TargetLayout {
     const event = this.event
     const targets: TargetGlyph[] = []
     const textBands: TextBand[] = []
@@ -435,14 +628,15 @@ class GlyphLockRenderer {
     const action = result ? 'TAP TO RETURN' : event.action
     const eyebrowSize = 20
     const preferredTitle = spec.composition === 'cascade' ? 52 : 56
-    const titleSize = this.fitTextSize(title, contentWidth, preferredTitle, 35, 520)
-    const summarySize = 27
+    const titleSize = this.fitTextSize(strokeSamplerCtx, title, contentWidth, preferredTitle, 35, 520)
+    const fittedSummary = this.fitWrappedLines(strokeSamplerCtx, summary, contentWidth, 3, 27, 20, 400)
+    const summarySize = fittedSummary.size
     const actionSize = 19
 
     const metaY = top + eyebrowSize
     const titleY = metaY + INTERNAL_H * .034 + titleSize
     let summaryY = titleY + INTERNAL_H * .026
-    const summaryLines = this.wrapText(summary, contentWidth, summarySize, 3)
+    const summaryLines = fittedSummary.lines
     const summaryBaselines: number[] = []
     for (const _line of summaryLines) {
       summaryY += summarySize * 1.44
@@ -462,7 +656,7 @@ class GlyphLockRenderer {
     const actionAnchor = actionAlign === 'right' ? right : primaryAnchor
     const pushAxis = this.pushAxisFor(spec.composition)
 
-    this.addAlignedLineTargets(targets, textBands, title, primaryAnchor, titleY, titleSize, [241, 247, 250], 1, primaryAlign, 'title', pushAxis, 520)
+    this.addAlignedLineTargets(strokeSamplerCtx, targets, textBands, title, primaryAnchor, titleY, titleSize, [241, 247, 250], 1, primaryAlign, 'title', pushAxis, 520)
     summaryLines.forEach((line, index) => {
       let lineAnchor = primaryAnchor
       let lineAlign = primaryAlign
@@ -477,16 +671,16 @@ class GlyphLockRenderer {
         lineAnchor = centerX + INTERNAL_W * (offsets[Math.min(index, offsets.length - 1)] ?? 0)
         lineAlign = 'center'
       }
-      this.addAlignedLineTargets(targets, textBands, line, lineAnchor, summaryBaselines[index]!, summarySize, [214, 225, 231], .90, lineAlign, 'summary', pushAxis, 400)
+      this.addAlignedLineTargets(strokeSamplerCtx, targets, textBands, line, lineAnchor, summaryBaselines[index]!, summarySize, [214, 225, 231], .90, lineAlign, 'summary', pushAxis, 400)
     })
 
     if (spec.composition === 'dial') {
       const arcCenterY = anchorY + INTERNAL_H * .003
-      this.addArcLineTargets(targets, textBands, eyebrow, centerX, arcCenterY, contentWidth * .55, INTERNAL_H * .092, -2.62, -.52, eyebrowSize, accent, .96, 'meta', 600)
-      this.addArcLineTargets(targets, textBands, action, centerX, arcCenterY, contentWidth * .53, INTERNAL_H * .102, .52, 2.62, actionSize, accent, .98, 'action', 600)
+      this.addArcLineTargets(strokeSamplerCtx, targets, textBands, eyebrow, centerX, arcCenterY, contentWidth * .55, INTERNAL_H * .092, -2.62, -.52, eyebrowSize, accent, .96, 'meta', 600)
+      this.addArcLineTargets(strokeSamplerCtx, targets, textBands, action, centerX, arcCenterY, contentWidth * .53, INTERNAL_H * .102, .52, 2.62, actionSize, accent, .98, 'action', 600)
     } else {
-      this.addAlignedLineTargets(targets, textBands, eyebrow, metaAnchor, metaY, eyebrowSize, accent, .96, metaAlign, 'meta', pushAxis, 600)
-      this.addAlignedLineTargets(targets, textBands, action, actionAnchor, actionY, actionSize, accent, .98, actionAlign, 'action', pushAxis, 600)
+      this.addAlignedLineTargets(strokeSamplerCtx, targets, textBands, eyebrow, metaAnchor, metaY, eyebrowSize, accent, .96, metaAlign, 'meta', pushAxis, 600)
+      this.addAlignedLineTargets(strokeSamplerCtx, targets, textBands, action, actionAnchor, actionY, actionSize, accent, .98, actionAlign, 'action', pushAxis, 600)
     }
 
     const bounds = {
@@ -495,8 +689,51 @@ class GlyphLockRenderer {
       right: right + INTERNAL_W * .035,
       bottom: Math.max(actionY + INTERNAL_H * .022, anchorY + INTERNAL_H * .115),
     }
-    this.addSemanticStructure(targets, bounds, result)
-    return { targets, textBands, bounds, centerX, centerY: anchorY }
+    this.addFullScreenEventStructure(targets, result)
+    this.clearStructureFromTextBands(targets, textBands)
+    return { targets: this.prioritizeTargetsWithinBudget(targets), textBands, bounds, centerX, centerY: anchorY }
+  }
+
+  private sampleTextStrokeTargets(
+    sampler: CanvasRenderingContext2D,
+    targets: TargetGlyph[], bounds: { left: number; top: number; right: number; bottom: number },
+    size: number, color: Rgb, alpha: number, role: TargetRole,
+  ): void {
+    const left = Math.max(0, Math.floor(bounds.left))
+    const top = Math.max(0, Math.floor(bounds.top))
+    const right = Math.min(INTERNAL_W, Math.ceil(bounds.right))
+    const bottom = Math.min(INTERNAL_H, Math.ceil(bounds.bottom))
+    const width = right - left, height = bottom - top
+    if (width <= 0 || height <= 0) return
+    const pixels = sampler.getImageData(left, top, width, height).data
+    const stepRatio = role === 'title' ? .13 : role === 'summary' ? .18 : .21
+    const samplingScale = Math.max(1, Math.sqrt(MOTION_PROFILES.cinematic.morphCount / this.motionSpec.morphCount))
+    const step = Math.max(4, Math.min(11, Math.round(size * stepRatio * samplingScale)))
+    const destinationSize = Math.max(5.2, Math.min(7.8, step * 1.12))
+    for (let cellY = 0; cellY < height; cellY += step) {
+      for (let cellX = 0; cellX < width; cellX += step) {
+        let bestAlpha = 0, bestX = cellX, bestY = cellY
+        const endY = Math.min(height, cellY + step)
+        const endX = Math.min(width, cellX + step)
+        for (let py = cellY; py < endY; py++) {
+          for (let px = cellX; px < endX; px++) {
+            const sampleAlpha = pixels[(py * width + px) * 4 + 3]!
+            if (sampleAlpha > bestAlpha) { bestAlpha = sampleAlpha; bestX = px; bestY = py }
+          }
+        }
+        if (bestAlpha < 42) continue
+        targets.push({
+          x: left + bestX,
+          y: top + bestY,
+          char: '·',
+          size: destinationSize,
+          alpha: alpha * (.68 + bestAlpha / 255 * .32),
+          color,
+          text: true,
+          role,
+        })
+      }
+    }
   }
 
   private pushAxisFor(style: CompositionStyle): PushAxis {
@@ -506,39 +743,43 @@ class GlyphLockRenderer {
   }
 
   private addAlignedLineTargets(
+    sampler: CanvasRenderingContext2D,
     targets: TargetGlyph[], bands: TextBand[], text: string, anchorX: number, baseline: number,
     size: number, color: [number, number, number], alpha: number, align: CanvasTextAlign,
     role: TargetRole, pushAxis: PushAxis, weight: number,
   ): void {
-    this.ctx.font = `${weight} ${size}px ${FONT_STACK}`
-    const width = this.ctx.measureText(text).width
+    sampler.clearRect(0, 0, INTERNAL_W, INTERNAL_H)
+    sampler.font = `${weight} ${size}px ${FONT_STACK}`
+    sampler.textAlign = align
+    sampler.textBaseline = 'alphabetic'
+    sampler.fillStyle = '#fff'
+    const width = sampler.measureText(text).width
     const startX = align === 'center' ? anchorX - width / 2 : align === 'right' ? anchorX - width : anchorX
-    let x = startX
-    for (const char of text) {
-      const advance = this.ctx.measureText(char).width
-      if (!/\s/.test(char)) targets.push({ x: x + advance / 2, y: baseline, char, size, alpha, color, text: true, role })
-      x += advance
-    }
     const padX = size * .52
-    bands.push({
-      bounds: {
-        left: startX - padX,
-        top: baseline - size * 1.26,
-        right: startX + width + padX,
-        bottom: baseline + size * .52,
-      },
-      pushAxis,
-    })
+    const bounds = {
+      left: startX - padX,
+      top: baseline - size * 1.34,
+      right: startX + width + padX,
+      bottom: baseline + size * .56,
+    }
+    sampler.fillText(text, anchorX, baseline)
+    this.sampleTextStrokeTargets(sampler, targets, bounds, size, color, alpha, role)
+    bands.push({ bounds, pushAxis })
   }
 
   private addArcLineTargets(
+    sampler: CanvasRenderingContext2D,
     targets: TargetGlyph[], bands: TextBand[], text: string,
     centerX: number, centerY: number, radiusX: number, radiusY: number,
     startAngle: number, endAngle: number, size: number,
     color: [number, number, number], alpha: number, role: TargetRole, weight: number,
   ): void {
-    this.ctx.font = `${weight} ${size}px ${FONT_STACK}`
-    const advances = [...text].map(char => this.ctx.measureText(char).width)
+    sampler.clearRect(0, 0, INTERNAL_W, INTERNAL_H)
+    sampler.font = `${weight} ${size}px ${FONT_STACK}`
+    sampler.textAlign = 'center'
+    sampler.textBaseline = 'middle'
+    sampler.fillStyle = '#fff'
+    const advances = [...text].map(char => sampler.measureText(char).width)
     const total = Math.max(1, advances.reduce((sum, value) => sum + value, 0))
     let cursor = 0
     ;[...text].forEach((char, index) => {
@@ -548,25 +789,46 @@ class GlyphLockRenderer {
       const x = centerX + Math.cos(angle) * radiusX
       const y = centerY + Math.sin(angle) * radiusY
       if (!/\s/.test(char)) {
-        targets.push({ x, y, char, size, alpha, color, text: true, role })
+        const tangent = Math.atan2(Math.cos(angle) * radiusY, -Math.sin(angle) * radiusX)
+        sampler.save()
+        sampler.translate(x, y)
+        sampler.rotate(tangent)
+        sampler.fillText(char, 0, 0)
+        sampler.restore()
         const pad = size * .60
         bands.push({ bounds: { left: x - pad, top: y - pad, right: x + pad, bottom: y + pad }, pushAxis: 'radial' })
       }
       cursor += advance
     })
+    this.sampleTextStrokeTargets(sampler, targets, {
+      left: centerX - radiusX - size * 1.5,
+      top: centerY - radiusY - size * 1.5,
+      right: centerX + radiusX + size * 1.5,
+      bottom: centerY + radiusY + size * 1.5,
+    }, size, color, alpha, role)
   }
 
-  private addSemanticStructure(
-    targets: TargetGlyph[], bounds: { left: number; top: number; right: number; bottom: number }, result: boolean,
-  ): void {
+  // Full-screen successor to the former addSemanticStructure strategy.
+  private addFullScreenEventStructure(targets: TargetGlyph[], result: boolean): void {
     const color = mixColor(this.themeSpec.tint, this.event.accent, result ? .58 : .46)
-    const centerX = (bounds.left + bounds.right) / 2
-    const centerY = (bounds.top + bounds.bottom) / 2
-    const width = bounds.right - bounds.left
-    const height = bounds.bottom - bounds.top
+    const left = INTERNAL_W * .035
+    const right = INTERNAL_W * .965
+    const top = INTERNAL_H * .15
+    const bottom = INTERNAL_H * .91
+    const width = right - left
+    const height = bottom - top
+    const centerX = INTERNAL_W / 2
+    const centerY = Math.max(top + height * .34, Math.min(bottom - height * .30, this.themeSpec.atmosphereY + INTERNAL_H * .13))
+    const phase = result ? .72 : .10
+    const themeIndex = Math.max(0, THEMES.findIndex(theme => theme.id === this.theme))
+    const systemSeed = 3109 + themeIndex * 173 + (result ? 997 : 0)
     const add = (x: number, y: number, index: number, alpha: number, size = 11.5) => {
       const char = STRUCTURE_GLYPHS[((index * 5 + 3) % STRUCTURE_GLYPHS.length + STRUCTURE_GLYPHS.length) % STRUCTURE_GLYPHS.length] ?? '·'
-      targets.push({ x, y, char, size, alpha, color, text: false, role: 'structure' })
+      targets.push({
+        x: Math.max(left, Math.min(right, x)),
+        y: Math.max(top, Math.min(bottom, y)),
+        char, size, alpha, color, text: false, role: 'structure',
+      })
     }
     const line = (x1: number, y1: number, x2: number, y2: number, count: number, seed: number, alpha: number, size = 11.5) => {
       const safe = Math.max(2, count)
@@ -576,11 +838,18 @@ class GlyphLockRenderer {
       }
     }
 
+    // Registration fragments pin the grammar to the physical display without
+    // enclosing the semantic stack or borrowing any text-derived coordinate.
+    line(left, top, INTERNAL_W * .205, top + INTERNAL_H * .011, 21, systemSeed, .29)
+    line(INTERNAL_W * .765, top + INTERNAL_H * .054, right, top + INTERNAL_H * .034, 24, systemSeed + 31, .24)
+    line(left, bottom - INTERNAL_H * .075, INTERNAL_W * .165, bottom, 19, systemSeed + 67, .22)
+    line(right, INTERNAL_H * .735, right - INTERNAL_W * .018, bottom, 25, systemSeed + 101, .27)
+
     switch (this.themeSpec.composition) {
       case 'figure':
         for (let i = 0; i < 68; i++) {
           const t = i / 67
-          const y = mix(bounds.top - INTERNAL_H * .070, bounds.bottom + INTERNAL_H * .080, t)
+          const y = mix(top, bottom, t)
           const spread = INTERNAL_W * (.235 + .115 * Math.sin(t * Math.PI))
           const pulse = Math.sin(t * Math.PI * 5) * INTERNAL_W * .012
           add(centerX - spread - pulse, y, i, .43)
@@ -590,11 +859,11 @@ class GlyphLockRenderer {
         break
       case 'core':
         for (let ring = 0; ring < 4; ring++) {
-          const rx = width * (.54 + ring * .090), ry = height * (.54 + ring * .105)
+          const rx = width * (.275 + ring * .061), ry = height * (.150 + ring * .060)
           const count = 54 + ring * 16
           for (let i = 0; i < count; i++) {
             if ((i + ring * 2) % 8 === 0) continue
-            const a = Math.PI * 2 * i / count
+            const a = Math.PI * 2 * i / count + phase + ring * .11
             add(centerX + Math.cos(a) * rx, centerY + Math.sin(a) * ry, i + ring * 73, .42 - ring * .055)
           }
         }
@@ -603,57 +872,57 @@ class GlyphLockRenderer {
         for (let band = 0; band < 2; band++) {
           const count = band === 0 ? 128 : 96
           for (let i = 0; i < count; i++) {
-            const a = Math.PI * 2 * i / count + band * .21
+            const a = Math.PI * 2 * i / count + band * .21 + phase
             if (Math.abs(Math.sin(a)) < .12 && Math.cos(a) > 0 && i % 3 !== 0) continue
-            const rx = width * (.57 + band * .12 + .04 * Math.sin(a * 3))
-            const ry = height * (.62 + band * .11)
+            const rx = width * (.315 + band * .070 + .025 * Math.sin(a * 3))
+            const ry = height * (.190 + band * .065)
             add(centerX + Math.cos(a) * rx, centerY + Math.sin(a) * ry, i + band * 131, band === 0 ? .43 : .27)
           }
         }
         break
       case 'architecture':
         for (let i = 0; i < 72; i++) {
-          const y = mix(bounds.top - INTERNAL_H * .055, bounds.bottom + INTERNAL_H * .065, i / 71)
+          const y = mix(top, bottom, i / 71)
           if (i % 5 !== 1) {
-            add(bounds.left - INTERNAL_W * .067, y, i, .43)
-            add(bounds.right + INTERNAL_W * .067, y, i + 37, .36)
+            add(left + INTERNAL_W * .032, y, i, .43)
+            add(right - INTERNAL_W * .032, y, i + 37, .36)
           }
-          if (i % 6 === 0) add(bounds.left - INTERNAL_W * .025, y, i + 73, .28)
+          if (i % 6 === 0) add(left + INTERNAL_W * .074, y, i + 73, .28)
         }
         for (let rail = 0; rail < 2; rail++) {
-          const y = rail === 0 ? bounds.top - INTERNAL_H * .038 : bounds.bottom + INTERNAL_H * .043
+          const y = rail === 0 ? top + INTERNAL_H * .028 : bottom - INTERNAL_H * .028
           for (let i = 0; i < 42; i++) {
             if (i > 14 && i < 27 && rail === 0) continue
-            add(mix(bounds.left - 52, bounds.right + 52, i / 41), y, i + rail * 51, rail === 0 ? .36 : .24)
+            add(mix(left, right, i / 41), y, i + rail * 51, rail === 0 ? .36 : .24)
           }
         }
         break
       case 'splice':
         for (let i = 0; i < 76; i++) {
-          const t = i / 75, y = mix(bounds.top - INTERNAL_H * .085, bounds.bottom + INTERNAL_H * .085, t)
+          const t = i / 75, y = mix(top, bottom, t)
           const wave = Math.sin(t * Math.PI * 10) * INTERNAL_W * .072
-          add(bounds.left - 64 + wave, y, i, .43)
-          add(bounds.right + 64 - wave, y, i + 43, .43)
+          add(left + INTERNAL_W * .105 + wave, y, i, .43)
+          add(right - INTERNAL_W * .105 - wave, y, i + 43, .43)
           if (i % 3 === 0) add(centerX + Math.sin(t * Math.PI * 10) * 10, y, i + 89, .25)
         }
         break
       case 'dial':
         for (let ring = 0; ring < 3; ring++) {
           const count = 112 - ring * 14
-          const rx = width * (.57 + ring * .105), ry = height * (.59 + ring * .105)
+          const rx = width * (.270 + ring * .060), ry = height * (.145 + ring * .055)
           for (let i = 0; i < count; i++) {
-            const angle = Math.PI * 2 * i / count - Math.PI * .5
+            const angle = Math.PI * 2 * i / count - Math.PI * .5 + phase
             if ((i + ring * 3) % 11 === 0) continue
             add(centerX + Math.cos(angle) * rx, centerY + Math.sin(angle) * ry, i + ring * 127, .43 - ring * .075)
           }
         }
         for (let tick = 0; tick < 36; tick++) {
-          const angle = Math.PI * 2 * tick / 36 - Math.PI * .5
+          const angle = Math.PI * 2 * tick / 36 - Math.PI * .5 + phase
           line(
-            centerX + Math.cos(angle) * width * .46,
-            centerY + Math.sin(angle) * height * .47,
-            centerX + Math.cos(angle) * width * .52,
-            centerY + Math.sin(angle) * height * .53,
+            centerX + Math.cos(angle) * width * .245,
+            centerY + Math.sin(angle) * height * .120,
+            centerX + Math.cos(angle) * width * .275,
+            centerY + Math.sin(angle) * height * .145,
             tick % 3 === 0 ? 4 : 2,
             tick * 7,
             tick % 3 === 0 ? .46 : .27,
@@ -661,10 +930,10 @@ class GlyphLockRenderer {
         }
         break
       case 'cascade': {
-        const leftRail = bounds.left - INTERNAL_W * .075
-        const rightRail = bounds.right + INTERNAL_W * .075
+        const leftRail = left + INTERNAL_W * .045
+        const rightRail = right - INTERNAL_W * .045
         for (let i = 0; i < 78; i++) {
-          const t = i / 77, y = mix(bounds.top - INTERNAL_H * .065, bounds.bottom + INTERNAL_H * .075, t)
+          const t = i / 77, y = mix(top, bottom, t)
           if (i % 4 !== 1) {
             add(leftRail, y, i, .44)
             add(rightRail, y, i + 41, .34)
@@ -675,20 +944,20 @@ class GlyphLockRenderer {
           }
         }
         for (let row = 0; row < 8; row++) {
-          const y = bounds.top - INTERNAL_H * .042 + row * INTERNAL_H * .023
+          const y = top + INTERNAL_H * .020 + row * INTERNAL_H * .023
           const inset = row * INTERNAL_W * .018
-          line(bounds.left - INTERNAL_W * .025 + inset, y, bounds.right + INTERNAL_W * .025 - inset, y, 28 - row * 2, row * 31, .34 - row * .025)
+          line(left + inset, y, right - inset, y, 28 - row * 2, row * 31, .34 - row * .025)
         }
         break
       }
       case 'constellation': {
         const nodes: Array<[number, number]> = [
-          [centerX - width * .56, centerY - height * .26],
-          [centerX - width * .30, centerY + height * .48],
-          [centerX, centerY - height * .58],
-          [centerX + width * .34, centerY + height * .44],
-          [centerX + width * .58, centerY - height * .18],
-          [centerX, centerY + height * .60],
+          [centerX - width * .42, centerY - height * .22],
+          [centerX - width * .28, centerY + height * .30],
+          [centerX, centerY - height * .34],
+          [centerX + width * .30, centerY + height * .28],
+          [centerX + width * .42, centerY - height * .16],
+          [centerX, centerY + height * .35],
         ]
         const edges: Array<[number, number]> = [[0, 2], [2, 4], [0, 1], [1, 5], [5, 3], [3, 4], [1, 2], [2, 3], [0, 5], [4, 5]]
         nodes.forEach(([x, y], nodeIndex) => {
@@ -708,16 +977,30 @@ class GlyphLockRenderer {
         break
       }
       case 'field':
-        for (let row = -4; row <= 4; row++) {
+        for (let row = -4; row <= 8; row++) {
           const y = centerY + row * INTERNAL_H * .056
           for (let i = 0; i < 66; i++) {
             if ((i + row + 13) % 5 === 0) continue
-            const t = i / 65, x = mix(bounds.left - 96, bounds.right + 96, t)
+            const t = i / 65, x = mix(left, right, t)
             const wave = Math.sin(t * Math.PI * 5 + row * .77) * INTERNAL_H * .011
             add(x, y + wave, i + row * 29, .22 + .035 * (4 - Math.abs(row)))
           }
         }
         break
+    }
+  }
+
+  private clearStructureFromTextBands(targets: TargetGlyph[], bands: TextBand[]): void {
+    const horizontalClearance = INTERNAL_W * .017
+    const verticalClearance = INTERNAL_H * .007
+    for (let targetIndex = targets.length - 1; targetIndex >= 0; targetIndex--) {
+      const target = targets[targetIndex]!
+      if (target.text) continue
+      const collides = bands.some(band => target.x >= band.bounds.left - horizontalClearance
+        && target.x <= band.bounds.right + horizontalClearance
+        && target.y >= band.bounds.top - verticalClearance
+        && target.y <= band.bounds.bottom + verticalClearance)
+      if (collides) targets.splice(targetIndex, 1)
     }
   }
 
@@ -863,10 +1146,8 @@ class GlyphLockRenderer {
     ;[x, y] = this.warpFillerAroundBands(x, y, layout, n)
     x = Math.max(INTERNAL_W * .018, Math.min(INTERNAL_W * .982, x))
     y = Math.max(INTERNAL_H * .035, Math.min(INTERNAL_H * .975, y))
-    const vocabulary = this.event.glyphs + spec.palette + STRUCTURE_GLYPHS
-    const char = n > .82 ? vocabulary[Math.min(vocabulary.length - 1, Math.floor(n * vocabulary.length))] ?? source.char : source.char
     return {
-      x, y, char,
+      x, y, char: source.char,
       size: source.size * (.93 + n * .15),
       alpha: clamp01(source.alpha * (result ? .70 : .78)),
       color: mixColor(spec.tint, this.event.accent, result ? .46 : .35),
@@ -916,8 +1197,14 @@ class GlyphLockRenderer {
         const value = pixels[i]! / 255
         const n = hash(x, y, this.theme.length)
         const threshold = .034 + n * .098 - this.themeSpec.densityBias
-        if (value < threshold && n < .92) continue
-        const level = clamp01(value * 1.12 + (n - .5) * .10)
+        const nearZero = value < MASK_BLACK_CUTOFF
+        // Empty mask space stays empty. A deterministic 1.3% dust allowance
+        // supplies rare stars without recreating the former uniform 8% haze.
+        if (nearZero && n < .987) continue
+        if (!nearZero && value < threshold && n < .955) continue
+        const level = nearZero
+          ? .055 + ((n - .987) / .013) * .045
+          : clamp01(value * 1.12 + (n - .5) * .10)
         let char = RAMP[Math.min(RAMP.length - 1, Math.floor(level * RAMP.length))] ?? '.'
         if (level < .20 || n > .88) char = this.themeSpec.palette[Math.floor(n * this.themeSpec.palette.length)] ?? BASE_GLYPHS[Math.floor(n * BASE_GLYPHS.length)] ?? '.'
         points.push({ x: x + (n - .5) * 1.25, y: y + (hash(y, x, 3) - .5) * 1.15, char, alpha: clamp01(.08 + level * .94), size: 9 + level * 4.2 })
@@ -927,25 +1214,90 @@ class GlyphLockRenderer {
   }
 
   private renderBaseBitmap(): void {
-    const ctx = this.baseCanvas.getContext('2d', { alpha: false })!
-    ctx.fillStyle = '#000'
-    ctx.fillRect(0, 0, INTERNAL_W, INTERNAL_H)
+    const ctx = this.baseCanvas.getContext('2d')!
+    ctx.clearRect(0, 0, INTERNAL_W, INTERNAL_H)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    const [tr, tg, tb] = this.themeSpec.tint
+    const palette = this.themePalette
+    const focusX = INTERNAL_W / 2, focusY = this.themeSpec.atmosphereY
     for (const point of this.basePoints) {
       const value = Math.floor(72 + 182 * point.alpha)
-      const tintMix = .12 + point.alpha * .13
-      ctx.fillStyle = `rgba(${Math.round(mix(value, tr, tintMix))},${Math.round(mix(value, tg, tintMix))},${Math.round(mix(value, tb, tintMix))},${point.alpha * .92})`
+      const neutral: Rgb = [value, value, value]
+      const tonePhase = .5 + .5 * Math.sin(point.x * .0082 + point.y * .0034 + this.theme.length * .41)
+      const tone = tonePhase < .5
+        ? mixColor(palette.primary, palette.secondary, tonePhase * 2)
+        : mixColor(palette.secondary, palette.tertiary, (tonePhase - .5) * 2)
+      const focusDistance = Math.hypot(point.x - focusX, (point.y - focusY) * .72)
+      const focusLift = Math.exp(-focusDistance / Math.max(1, INTERNAL_W * .62))
+      const coreStrength = smooth((point.alpha - .48) / .48) * (.72 + focusLift * .28)
+      const colored = mixColor(neutral, tone, .30 + point.alpha * .42)
+      const finalColor = mixColor(colored, palette.core, coreStrength * .36)
+      if (coreStrength > .54 && hash(point.x, point.y, 181) > .64) {
+        ctx.font = `${point.size * (1.18 + coreStrength * .16)}px ${FONT_STACK}`
+        ctx.fillStyle = `rgba(${palette.core[0]},${palette.core[1]},${palette.core[2]},${Math.min(.060, coreStrength * .055)})`
+        ctx.fillText(point.char, point.x, point.y)
+      }
+      ctx.fillStyle = `rgba(${finalColor[0]},${finalColor[1]},${finalColor[2]},${Math.min(.96, point.alpha * .94)})`
       ctx.font = `${point.size}px ${FONT_STACK}`
       ctx.fillText(point.char, point.x, point.y)
+      if (coreStrength > .66) {
+        ctx.fillStyle = `rgba(${palette.core[0]},${palette.core[1]},${palette.core[2]},${coreStrength * .13})`
+        ctx.fillText(point.char, point.x, point.y)
+      }
     }
-    const gradient = ctx.createRadialGradient(INTERNAL_W / 2, this.themeSpec.atmosphereY, 20, INTERNAL_W / 2, this.themeSpec.atmosphereY, 820)
-    gradient.addColorStop(0, `rgba(${tr},${tg},${tb},.050)`)
-    gradient.addColorStop(.45, `rgba(${tr},${tg},${tb},.018)`)
+    const gradient = ctx.createRadialGradient(focusX, focusY, 16, focusX, focusY, 560)
+    gradient.addColorStop(0, `rgba(${palette.secondary[0]},${palette.secondary[1]},${palette.secondary[2]},.018)`)
+    gradient.addColorStop(.38, `rgba(${palette.tertiary[0]},${palette.tertiary[1]},${palette.tertiary[2]},.006)`)
     gradient.addColorStop(1, 'rgba(0,0,0,0)')
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, INTERNAL_W, INTERNAL_H)
+  }
+
+  private drawGlyphRibbonAtmosphere(now: number, reveal: number): void {
+    const ctx = this.ctx, spec = this.themeSpec, profile = this.motionSpec
+    const seconds = now / 1000 * profile.speed
+    const semanticMix = smooth(reveal)
+    const themeColor: Rgb = [0, 0, 0]
+    const semanticColor: Rgb = [0, 0, 0]
+    const color: Rgb = [0, 0, 0]
+    // These ribbon echoes are ambient source material only; the semantic topology
+    // takes full responsibility once the reveal settles.
+    const focusCalm = 1 - smooth(reveal / .78)
+    const wakeT = clamp01((now - this.wakeStart) / 2100)
+    const wakeLift = (1 - smooth(wakeT)) * .28
+    const visibility = Math.min(1, focusCalm + wakeLift)
+    if (visibility <= .002) return
+
+    ctx.save()
+    ctx.globalCompositeOperation = 'screen'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    for (const point of this.ribbonGlyphs) {
+      const lane = point.lane
+      const normalizedX = point.x / INTERNAL_W
+      const laneOffset = (lane - 1) * INTERNAL_H * .15
+      const ribbonY = spec.atmosphereY + laneOffset
+        + Math.sin(normalizedX * Math.PI * (2.10 + lane * .32) + seconds * (.12 + lane * .026) + lane * 1.7) * INTERNAL_H * (.030 + lane * .006)
+        + Math.sin(normalizedX * Math.PI * 5.2 - seconds * .075 + lane) * INTERNAL_H * .010
+      const distance = Math.abs(point.y - ribbonY)
+      const ribbonWeight = Math.exp(-(distance * distance) / (2 * 54 * 54)) * point.alpha
+      if (ribbonWeight < .075 || !point.atmosphereEligible) continue
+      const flow = Math.sin(normalizedX * Math.PI * 3.4 + seconds * .24 + lane * 2.2)
+      const x = point.x + flow * (3.5 + lane * 1.8) * profile.amplitude
+      const y = point.y + Math.cos(normalizedX * Math.PI * 2.7 - seconds * .18 + lane) * (2.2 + lane) * profile.amplitude
+      const colorPhase = normalizedX * .42 + seconds * .018 + lane * .23 + point.phase * .018
+      writePaletteColor(themeColor, this.themePalette, colorPhase)
+      writePaletteColor(semanticColor, this.semanticPalette, colorPhase)
+      writeMixedColor(color, themeColor, semanticColor, semanticMix)
+      const alpha = Math.min(.070, ribbonWeight * (.035 + lane * .006) * visibility)
+      if (alpha <= .008) continue
+      ctx.font = `${point.size * (.94 + ribbonWeight * .08)}px ${FONT_STACK}`
+      ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha * .48})`
+      ctx.fillText(point.char, x - flow * 5.5, y + flow * 2.1)
+      ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha})`
+      ctx.fillText(point.char, x, y)
+    }
+    ctx.restore()
   }
 
   private drawMorphField(reveal: number, result: number, now: number, listening: boolean): void {
@@ -955,7 +1307,12 @@ class GlyphLockRenderer {
     const focusX = INTERNAL_W / 2
     const focusY = spec.atmosphereY
     const handoff = smooth(reveal / .16)
-    const seconds = now / 1000
+    const seconds = now / 1000 * this.motionSpec.speed
+    const palette = this.semanticPalette
+    const travelingColor: Rgb = [0, 0, 0]
+    const eventColor: Rgb = [0, 0, 0]
+    const finalColor: Rgb = [0, 0, 0]
+    const echoColor: Rgb = [0, 0, 0]
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
 
@@ -1054,8 +1411,18 @@ class GlyphLockRenderer {
       size = mix(size, glyph.resultTarget.size, resultBlend)
       let alpha = mix(glyph.source.alpha * .94, glyph.eventTarget.alpha, eventBlend)
       alpha = mix(alpha, glyph.resultTarget.alpha, resultBlend) * handoff
-      const eventColor = mixColor(spec.tint, glyph.eventTarget.color, eventBlend)
-      const finalColor = mixColor(eventColor, glyph.resultTarget.color, resultBlend)
+      writeMixedColor(eventColor, spec.tint, glyph.eventTarget.color, eventBlend)
+      writeMixedColor(finalColor, eventColor, glyph.resultTarget.color, resultBlend)
+      if (!activeTarget.text) {
+        const huePhase = seconds * .024 + glyph.phase / (Math.PI * 2) * .24 + x / INTERNAL_W * .18 + y / INTERNAL_H * .12
+        writePaletteColor(travelingColor, palette, huePhase)
+        const bandSpan = INTERNAL_H + INTERNAL_W * .20
+        const bandPosition = (seconds * 58 + this.event.id.length * 47) % bandSpan - INTERNAL_W * .10
+        const bandDistance = y + x * .12 - bandPosition
+        const energyBand = Math.exp(-(bandDistance * bandDistance) / (2 * 92 * 92))
+        writeMixedColor(finalColor, finalColor, travelingColor, .18 + energyBand * .17)
+        alpha = Math.min(.78, alpha * (1 + energyBand * .10))
+      }
       if (activeTarget.text && local > .88) alpha = Math.max(alpha, activeTarget.alpha * .94)
       if (alpha <= .012) continue
 
@@ -1064,54 +1431,18 @@ class GlyphLockRenderer {
         const echoProgress = clamp01((moveT - .10) / .90)
         const echoX = mix(glyph.source.x, eventX, echoProgress)
         const echoY = mix(glyph.source.y, eventY, echoProgress)
-        const echoColor = mixColor(spec.tint, finalColor, .34)
+        writeMixedColor(echoColor, spec.tint, finalColor, .34)
         ctx.font = `${mix(glyph.source.size, size, .46)}px ${FONT_STACK}`
         ctx.fillStyle = `rgba(${echoColor[0]},${echoColor[1]},${echoColor[2]},${alpha * trailVisibility})`
         ctx.fillText(glyph.source.char, echoX, echoY)
       }
 
       ctx.font = `${size}px ${FONT_STACK}`
-      const eventCharBlend = smooth((local - this.charStartFor(glyph.eventTarget.role)) / .16)
-      if (result <= .001) {
-        this.drawGlyphTransition(glyph.source.char, glyph.eventTarget.char, eventCharBlend, x, y, alpha, finalColor)
-      } else {
-        const eventChar = eventCharBlend >= .5 ? glyph.eventTarget.char : glyph.source.char
-        const resultCharBlend = smooth((result - .40) / .18)
-        this.drawGlyphTransition(eventChar, glyph.resultTarget.char, resultCharBlend, x, y, alpha, finalColor)
-      }
+      ctx.fillStyle = `rgba(${finalColor[0]},${finalColor[1]},${finalColor[2]},${alpha})`
+      ctx.fillText(glyph.source.char, x, y)
     }
 
     this.drawMorphWave(reveal, result)
-  }
-
-  private charStartFor(role: TargetRole): number {
-    if (role === 'title') return .30
-    if (role === 'summary') return .38
-    if (role === 'meta') return .46
-    if (role === 'action') return .50
-    return .44
-  }
-
-  private drawGlyphTransition(
-    from: string, to: string, blend: number, x: number, y: number,
-    alpha: number, color: [number, number, number],
-  ): void {
-    const [r, g, b] = color
-    if (from === to || blend >= .84) {
-      this.ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`
-      this.ctx.fillText(to, x, y)
-      return
-    }
-    if (blend <= .16) {
-      this.ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`
-      this.ctx.fillText(from, x, y)
-      return
-    }
-    const local = (blend - .16) / .68
-    this.ctx.fillStyle = `rgba(${r},${g},${b},${alpha * (1 - local)})`
-    this.ctx.fillText(from, x, y)
-    this.ctx.fillStyle = `rgba(${r},${g},${b},${alpha * local})`
-    this.ctx.fillText(to, x, y)
   }
 
   private drawMorphWave(reveal: number, result: number): void {
@@ -1131,12 +1462,25 @@ class GlyphLockRenderer {
     const ctx = this.ctx, spec = this.themeSpec, profile = this.motionSpec
     const seconds = now / 1000 * profile.speed
     const focusX = INTERNAL_W / 2, focusY = spec.atmosphereY
-    const [r, g, b] = spec.tint
+    const semanticMix = smooth(reveal)
+    const themeGlyphColor: Rgb = [0, 0, 0]
+    const semanticGlyphColor: Rgb = [0, 0, 0]
+    const glyphColor: Rgb = [0, 0, 0]
+    const echoColor: Rgb = [0, 0, 0]
+    const coreColor: Rgb = [0, 0, 0]
+    const secondaryColor: Rgb = [0, 0, 0]
+    const tertiaryColor: Rgb = [0, 0, 0]
+    writeMixedColor(coreColor, this.themePalette.core, this.semanticPalette.core, semanticMix)
+    writeMixedColor(secondaryColor, this.themePalette.secondary, this.semanticPalette.secondary, semanticMix)
+    writeMixedColor(tertiaryColor, this.themePalette.tertiary, this.semanticPalette.tertiary, semanticMix)
     const wakeT = clamp01((now - this.wakeStart) / 2200)
     const wakeRadius = mix(18, 980, ease(wakeT))
     const wakeStrength = 1 - smooth(wakeT)
     const fade = 1 - smooth(reveal / .54)
     if (fade <= .001 && wakeStrength <= .001) return
+
+    const energySpan = INTERNAL_H + INTERNAL_W * .44
+    const energyPosition = (seconds * 92 + this.theme.length * 71) % energySpan - INTERNAL_W * .16
 
     ctx.save()
     ctx.textAlign = 'center'
@@ -1146,8 +1490,10 @@ class GlyphLockRenderer {
       const strength = spec.motionStrength * profile.amplitude * p.depth
       const vx = p.x - focusX, vy = p.y - focusY
       const radius = Math.max(1, Math.hypot(vx, vy))
-      let x = p.x + this.pointerParallax.x * (3 + 12 * p.depth)
-      let y = p.y + this.pointerParallax.y * (3 + 10 * p.depth)
+      const sourceX = p.x + this.pointerParallax.x * (3 + 12 * p.depth)
+      const sourceY = p.y + this.pointerParallax.y * (3 + 10 * p.depth)
+      let x = sourceX
+      let y = sourceY
       switch (spec.motion) {
         case 'orbital': {
           const angle = Math.sin(seconds * .30 + p.phase) * .012 * strength + seconds * .0018 * (p.phase > Math.PI ? -1 : 1)
@@ -1190,42 +1536,181 @@ class GlyphLockRenderer {
           x += Math.sin(seconds * .55 + p.y * .006 + p.phase) * 5.5 * strength
           y += Math.cos(seconds * .38 + p.x * .005 + p.phase) * 3.2 * strength
       }
+
+      // Two divergence-like fields move whole neighborhoods together while a
+      // finer curl keeps the surface alive. Both operate on existing glyphs.
+      const largeXPhase = p.x * .0036 + seconds * .13 + p.phase * .18
+      const largeYPhase = p.y * .0027 - seconds * .10 - p.phase * .11
+      const fineXPhase = p.x * .0107 - seconds * .31 + p.phase * .47
+      const fineYPhase = p.y * .0081 + seconds * .24 - p.phase * .39
+      const curlLargeX = Math.sin(largeXPhase) * Math.cos(largeYPhase)
+      const curlLargeY = -Math.cos(largeXPhase) * Math.sin(largeYPhase)
+      const curlFineX = Math.sin(fineXPhase) * Math.cos(fineYPhase)
+      const curlFineY = -Math.cos(fineXPhase) * Math.sin(fineYPhase)
+      const curlGain = strength * (.64 + p.depth * .36) * p.edgeMobility
+      x += (curlLargeX * 5.8 + curlFineX * 1.9) * curlGain
+      y += (curlLargeY * 4.5 + curlFineY * 1.5) * curlGain
+
+      const energyDistance = p.energyCoordinate - energyPosition
+      const rawEnergyBand = Math.exp(-(energyDistance * energyDistance) / (2 * 72 * 72))
+      const energyBand = rawEnergyBand * Math.max(fade, wakeStrength * .34)
+      x += Math.sin(p.phase + seconds * .8) * energyBand * 4.8 * strength
+      y -= Math.cos(p.phase * .7 - seconds * .6) * energyBand * 3.1 * strength
+
+      const glitchPulse = p.glitchEligible
+        ? smooth((Math.sin(seconds * (1.75 + p.depth * .42) + p.phase * 2.8) - .82) / .18)
+        : 0
+      x += p.glitchDirection * glitchPulse * (6 + p.depth * 11) * profile.amplitude * p.edgeMobility
+      y += glitchPulse * p.glitchJitter * 3.2 * p.edgeMobility
+
       const wakeBand = Math.exp(-Math.pow((radius - wakeRadius) / 86, 2)) * wakeStrength
       const twinkle = .58 + .42 * Math.sin(seconds * (1.1 + p.depth) + p.phase)
-      const alpha = fade * (.045 + p.alpha * .24) * (.72 + twinkle * .28) + wakeBand * .46
+      const alpha = Math.min(
+        .44,
+        fade * (.034 + p.alpha * .22) * (.72 + twinkle * .28)
+          + energyBand * (.050 + p.alpha * .075)
+          + wakeBand * .34,
+      )
       if (alpha <= .015) continue
-      ctx.font = `${p.size * (1 + wakeBand * .12)}px ${FONT_STACK}`
-      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`
+
+      const huePhase = seconds * .026 + p.palettePhase
+      writePaletteColor(themeGlyphColor, this.themePalette, huePhase)
+      writePaletteColor(semanticGlyphColor, this.semanticPalette, huePhase)
+      writeMixedColor(glyphColor, themeGlyphColor, semanticGlyphColor, semanticMix)
+      writeMixedColor(glyphColor, glyphColor, coreColor, Math.min(.52, energyBand * .46 + wakeBand * .24))
+      const motionX = x - sourceX, motionY = y - sourceY
+      const motionDistance = Math.hypot(motionX, motionY)
+      const glyphSize = p.size * (1 + wakeBand * .10 + energyBand * .075)
+      ctx.font = `${glyphSize}px ${FONT_STACK}`
+
+      if (p.echoPrimary && motionDistance > 1.2) {
+        writeMixedColor(echoColor, tertiaryColor, glyphColor, .36)
+        const echoAlpha = Math.min(.048, alpha * (.085 + p.depth * .065) * (1 + energyBand * .7))
+        ctx.fillStyle = `rgba(${echoColor[0]},${echoColor[1]},${echoColor[2]},${echoAlpha})`
+        ctx.fillText(p.char, x - motionX * .58, y - motionY * .58)
+        if (energyBand > .28 && p.echoSecondary) {
+          ctx.fillStyle = `rgba(${secondaryColor[0]},${secondaryColor[1]},${secondaryColor[2]},${echoAlpha * .38})`
+          ctx.fillText(p.char, x - motionX * .91, y - motionY * .91)
+        }
+      }
+      if (glitchPulse > .05) {
+        const glitchAlpha = Math.min(.065, alpha * glitchPulse * .26)
+        ctx.fillStyle = `rgba(${tertiaryColor[0]},${tertiaryColor[1]},${tertiaryColor[2]},${glitchAlpha})`
+        ctx.fillText(p.char, x - p.glitchDirection * (4 + glitchPulse * 4), y)
+      }
+
+      if (energyBand > .34 && p.depth > .48 && p.glowEligible) {
+        ctx.font = `${glyphSize * (1.24 + energyBand * .16)}px ${FONT_STACK}`
+        ctx.fillStyle = `rgba(${coreColor[0]},${coreColor[1]},${coreColor[2]},${Math.min(.045, energyBand * .040)})`
+        ctx.fillText(p.char, x, y)
+        ctx.font = `${glyphSize}px ${FONT_STACK}`
+      }
+      ctx.fillStyle = `rgba(${glyphColor[0]},${glyphColor[1]},${glyphColor[2]},${alpha})`
       ctx.fillText(p.char, x, y)
     }
     ctx.restore()
   }
 
-  private fitTextSize(text: string, maxWidth: number, preferred: number, minimum: number, weight: number): number {
+  private prioritizeTargetsWithinBudget(targets: TargetGlyph[]): TargetGlyph[] {
+    const budget = Math.min(this.motionSpec.morphCount, MAX_MORPH_SOURCE_COUNT)
+    if (targets.length <= budget) return targets
+    const primaryTextTargets = targets.filter(target => target.text && (target.role === 'title' || target.role === 'summary'))
+    const supportTextTargets = targets.filter(target => target.text && target.role !== 'title' && target.role !== 'summary')
+    const structureTargets = targets.filter(target => !target.text)
+    if (primaryTextTargets.length >= budget) return this.selectEvenly(primaryTextTargets, budget)
+    const primaryAndSupport = primaryTextTargets.concat(supportTextTargets)
+    if (primaryAndSupport.length >= budget) {
+      return primaryTextTargets.concat(this.selectEvenly(supportTextTargets, budget - primaryTextTargets.length))
+    }
+    return primaryAndSupport.concat(this.selectEvenly(structureTargets, budget - primaryAndSupport.length))
+  }
+
+  private selectEvenly<T>(items: T[], count: number): T[] {
+    if (count <= 0) return []
+    if (items.length <= count) return items
+    if (count === 1) return [items[Math.floor(items.length / 2)]!]
+    const selected: T[] = []
+    for (let index = 0; index < count; index++) {
+      selected.push(items[Math.round(index * (items.length - 1) / (count - 1))]!)
+    }
+    return selected
+  }
+
+  private fitTextSize(
+    measurer: CanvasRenderingContext2D,
+    text: string, maxWidth: number, preferred: number, minimum: number, weight: number,
+  ): number {
     let low = minimum, high = preferred
     for (let i = 0; i < 10; i++) {
       const mid = (low + high) / 2
-      this.ctx.font = `${weight} ${mid}px ${FONT_STACK}`
-      if (this.ctx.measureText(text).width <= maxWidth) low = mid
+      measurer.font = `${weight} ${mid}px ${FONT_STACK}`
+      if (measurer.measureText(text).width <= maxWidth) low = mid
       else high = mid
     }
     return low
   }
 
-  private wrapText(text: string, maxWidth: number, size: number, maxLines: number): string[] {
-    this.ctx.font = `400 ${size}px ${FONT_STACK}`
-    const words = text.trim().split(/\s+/)
+  private fitWrappedLines(
+    measurer: CanvasRenderingContext2D,
+    text: string, maxWidth: number, preferredMaximumLines: number,
+    preferredSize: number, minimumSize: number, weight: number,
+  ): FittedLines {
+    measurer.font = `${weight} ${preferredSize}px ${FONT_STACK}`
+    const preferredLines = this.wrapTextFully(measurer, text, maxWidth)
+    if (preferredLines.length <= preferredMaximumLines) return { lines: preferredLines, size: preferredSize }
+
+    measurer.font = `${weight} ${minimumSize}px ${FONT_STACK}`
+    const minimumLines = this.wrapTextFully(measurer, text, maxWidth)
+    if (minimumLines.length > preferredMaximumLines) {
+      // The preferred line count is soft: at minimum size, preserve all content.
+      return { lines: minimumLines, size: minimumSize }
+    }
+
+    let low = minimumSize, high = preferredSize
+    let bestLines = minimumLines
+    for (let iteration = 0; iteration < 12; iteration++) {
+      const candidateSize = (low + high) / 2
+      measurer.font = `${weight} ${candidateSize}px ${FONT_STACK}`
+      const candidateLines = this.wrapTextFully(measurer, text, maxWidth)
+      if (candidateLines.length <= preferredMaximumLines) {
+        low = candidateSize
+        bestLines = candidateLines
+      } else high = candidateSize
+    }
+    return { lines: bestLines, size: low }
+  }
+
+  private wrapTextFully(measurer: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+    const clean = text.trim()
+    if (!clean) return ['']
     const lines: string[] = []
     let current = ''
-    for (const word of words) {
+    for (const rawWord of clean.split(/\s+/)) {
+      let word = rawWord
       const candidate = current ? `${current} ${word}` : word
-      if (!current || this.ctx.measureText(candidate).width <= maxWidth) { current = candidate; continue }
-      lines.push(current)
+      if (measurer.measureText(candidate).width <= maxWidth) {
+        current = candidate
+        continue
+      }
+      if (current) {
+        lines.push(current)
+        current = ''
+      }
+      while (word && measurer.measureText(word).width > maxWidth) {
+        const characters = [...word]
+        let low = 1, high = characters.length
+        while (low < high) {
+          const middle = Math.ceil((low + high) / 2)
+          if (measurer.measureText(characters.slice(0, middle).join('')).width <= maxWidth) low = middle
+          else high = middle - 1
+        }
+        lines.push(characters.slice(0, low).join(''))
+        word = characters.slice(low).join('')
+      }
       current = word
-      if (lines.length === maxLines - 1) break
     }
-    if (current && lines.length < maxLines) lines.push(current)
-    return lines.length ? lines : [text]
+    if (current) lines.push(current)
+    return lines
   }
 
   private render = (now: number): void => {
@@ -1258,6 +1743,7 @@ class GlyphLockRenderer {
     const revealT = smooth(reveal)
     const resultT = smooth(result)
     const motionNow = this.captureMotionMs ?? now
+    this.drawGlyphRibbonAtmosphere(motionNow, revealT)
     const baseAlpha = 1 - .96 * smooth(revealT / .68)
     if (baseAlpha > .001) {
       const breathing = Math.sin(motionNow / 3600 * this.motionSpec.speed) * .0016 * this.motionSpec.amplitude
@@ -1273,16 +1759,6 @@ class GlyphLockRenderer {
 
     this.drawAmbientMotion(motionNow, revealT)
     this.drawMorphField(revealT, resultT, motionNow, this.state === 'listening')
-
-    ctx.globalCompositeOperation = 'screen'
-    const scanY = (motionNow * .030 * this.motionSpec.speed) % INTERNAL_H
-    const scan = ctx.createLinearGradient(0, scanY - 72, 0, scanY + 72)
-    scan.addColorStop(0, 'rgba(255,255,255,0)')
-    scan.addColorStop(.5, 'rgba(200,224,236,.014)')
-    scan.addColorStop(1, 'rgba(255,255,255,0)')
-    ctx.fillStyle = scan
-    ctx.fillRect(0, scanY - 72, INTERNAL_W, 144)
-    ctx.globalCompositeOperation = 'source-over'
   }
 
   private attachInput(): void {

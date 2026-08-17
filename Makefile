@@ -1,7 +1,7 @@
 .PHONY: assets checks visual serve capture android clean
 
 assets:
-	python3 scripts/generate_scene_masks.py --jobs 3 --compress-level 6
+	python3 scripts/generate_scene_masks.py --jobs 2 --compress-level 6
 
 checks:
 	python3 scripts/check_morph_first.py

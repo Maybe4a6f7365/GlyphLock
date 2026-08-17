@@ -18,6 +18,7 @@ npm-debug.log*
 Thumbs.db
 
 # Generated captures outside docs/media
+.artifacts/
 preview_*.png
 animation_contact_sheet.png
 glyphlock-transform.mp4
@@ -27,8 +28,10 @@ GlyphLock-Visual-Lab.html
 
 # Generated procedural scene masks. Existing tracked legacy files remain tracked.
 apps/visual-lab/public/assets/scene_*.png
+apps/visual-lab/public/assets/.scene_*.png.*.tmp
 apps/visual-lab/public/assets/wallpaper_thumbnail.png
 apps/android/app/src/main/res/drawable-nodpi/scene_*.png
+apps/android/app/src/main/res/drawable-nodpi/.scene_*.png.*.tmp
 apps/android/app/src/main/res/drawable/wallpaper_thumbnail.png
 apps/visual-lab/dist/
 build/review/

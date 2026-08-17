@@ -33,6 +33,15 @@ final class GlyphSceneRenderer {
     private static final String BASE_GLYPHS = " .·,:;+=x1I|/\\()[]{}<>#08@";
     private static final String STRUCTURE_GLYPHS = "·.:;|/\\+−=[]{}<>01";
     private static final Typeface MONO = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL);
+    private static final float FLUID_REFERENCE_WIDTH = 1080f;
+    private static final float FLUID_REFERENCE_HEIGHT = 2400f;
+    private static final float MASK_BLACK_CUTOFF = 10f / 255f;
+    private static final float CLOCK_SAFE_LEFT = 0.135f;
+    private static final float CLOCK_SAFE_RIGHT = 0.865f;
+    private static final float CLOCK_SAFE_BOTTOM = 0.130f;
+    private static final float GESTURE_SAFE_LEFT = 0.055f;
+    private static final float GESTURE_SAFE_RIGHT = 0.945f;
+    private static final float GESTURE_SAFE_TOP = 0.925f;
 
     private GlyphSceneRenderer() {}
 
@@ -49,6 +58,7 @@ final class GlyphSceneRenderer {
         final Paint glyphPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
         final Paint effectPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         final char[] glyphBuffer = new char[1];
+        final float[] motionScratch = new float[2];
         long previewMinute = Long.MIN_VALUE;
         String previewTime = "";
         String previewDate = "";
@@ -115,8 +125,60 @@ final class GlyphSceneRenderer {
         final float alpha;
         final float phase;
         final float depth;
+        final float radius;
+        final float edgeMobility;
+        final float energyCoordinate;
+        final float palettePhase;
+        final float largeCurlSumSin;
+        final float largeCurlSumCos;
+        final float largeCurlDifferenceSin;
+        final float largeCurlDifferenceCos;
+        final float fineCurlSumSin;
+        final float fineCurlSumCos;
+        final float fineCurlDifferenceSin;
+        final float fineCurlDifferenceCos;
+        final float energyPhaseSin;
+        final float energyPhaseCos;
+        final float energyPhaseScaledSin;
+        final float energyPhaseScaledCos;
+        final boolean glitchEligible;
+        final float glitchDirection;
+        final float glitchJitter;
+        final boolean echo;
+        final boolean secondaryEcho;
+        final boolean glow;
 
-        AmbientGlyph(float x, float y, char glyph, float size, float alpha, float phase, float depth) {
+        AmbientGlyph(
+                float x,
+                float y,
+                char glyph,
+                float size,
+                float alpha,
+                float phase,
+                float depth,
+                float radius,
+                float edgeMobility,
+                float energyCoordinate,
+                float palettePhase,
+                float largeCurlSumSin,
+                float largeCurlSumCos,
+                float largeCurlDifferenceSin,
+                float largeCurlDifferenceCos,
+                float fineCurlSumSin,
+                float fineCurlSumCos,
+                float fineCurlDifferenceSin,
+                float fineCurlDifferenceCos,
+                float energyPhaseSin,
+                float energyPhaseCos,
+                float energyPhaseScaledSin,
+                float energyPhaseScaledCos,
+                boolean glitchEligible,
+                float glitchDirection,
+                float glitchJitter,
+                boolean echo,
+                boolean secondaryEcho,
+                boolean glow
+        ) {
             this.x = x;
             this.y = y;
             this.glyph = glyph;
@@ -124,6 +186,28 @@ final class GlyphSceneRenderer {
             this.alpha = alpha;
             this.phase = phase;
             this.depth = depth;
+            this.radius = radius;
+            this.edgeMobility = edgeMobility;
+            this.energyCoordinate = energyCoordinate;
+            this.palettePhase = palettePhase;
+            this.largeCurlSumSin = largeCurlSumSin;
+            this.largeCurlSumCos = largeCurlSumCos;
+            this.largeCurlDifferenceSin = largeCurlDifferenceSin;
+            this.largeCurlDifferenceCos = largeCurlDifferenceCos;
+            this.fineCurlSumSin = fineCurlSumSin;
+            this.fineCurlSumCos = fineCurlSumCos;
+            this.fineCurlDifferenceSin = fineCurlDifferenceSin;
+            this.fineCurlDifferenceCos = fineCurlDifferenceCos;
+            this.energyPhaseSin = energyPhaseSin;
+            this.energyPhaseCos = energyPhaseCos;
+            this.energyPhaseScaledSin = energyPhaseScaledSin;
+            this.energyPhaseScaledCos = energyPhaseScaledCos;
+            this.glitchEligible = glitchEligible;
+            this.glitchDirection = glitchDirection;
+            this.glitchJitter = glitchJitter;
+            this.echo = echo;
+            this.secondaryEcho = secondaryEcho;
+            this.glow = glow;
         }
     }
 
@@ -294,7 +378,13 @@ final class GlyphSceneRenderer {
         if (basePoints.isEmpty()) throw new IllegalStateException("Glyph scene mask produced no points");
 
         Bitmap base = renderBaseBitmap(renderWidth, renderHeight, basePoints, theme);
-        List<AmbientGlyph> ambientGlyphs = buildAmbientGlyphs(basePoints, theme, quality);
+        List<AmbientGlyph> ambientGlyphs = buildAmbientGlyphs(
+                basePoints,
+                renderWidth,
+                renderHeight,
+                theme,
+                quality
+        );
         List<GlyphPoint> morphSources = selectMorphSources(basePoints, theme, quality);
         TargetLayout eventLayout = buildTargetLayout(renderWidth, renderHeight, theme, event, false);
         TargetLayout resultLayout = buildTargetLayout(renderWidth, renderHeight, theme, event, true);
@@ -415,7 +505,14 @@ final class GlyphSceneRenderer {
                 float value = Color.red(pixel) / 255f;
                 float noise = GlyphMath.hash(x, y, theme.ordinal() + 1f);
                 float threshold = 0.037f + noise * 0.105f;
-                if (value < threshold && noise < 0.91f) continue;
+                // Preserve true black around the hero system. Background dust is admitted
+                // deliberately and sparsely instead of letting the random gate populate roughly
+                // one cell in eleven across the entire screen.
+                if (value < MASK_BLACK_CUTOFF) {
+                    if (noise < 0.988f) continue;
+                } else if (value < threshold && noise < 0.955f) {
+                    continue;
+                }
                 float level = GlyphMath.clamp01(
                         value * 1.10f * theme.exposure + (noise - 0.5f) * 0.10f
                 );
@@ -451,6 +548,7 @@ final class GlyphSceneRenderer {
             DemoCatalog.Theme theme,
             RenderQuality quality
     ) {
+        int runtimeStart = points.size();
         float density = quality == RenderQuality.ECO ? 0.72f
                 : quality == RenderQuality.LUX ? 1.10f : 0.90f;
         float left = width * 0.035f;
@@ -599,6 +697,13 @@ final class GlyphSceneRenderer {
                 density,
                 seed + 5000,
                 size * 1.03f
+        );
+        preserveSourceCountOutsideSafeZones(
+                points,
+                runtimeStart,
+                width,
+                height,
+                seed + 9000
         );
     }
 
@@ -1005,6 +1110,68 @@ final class GlyphSceneRenderer {
         ));
     }
 
+    /**
+     * Removes runtime-authored source points from lock-screen clock and gesture regions while
+     * preserving the exact source count. Replacements stay in the side telemetry gutters, so
+     * downstream particle budgets do not shrink when a dense rail crosses a protected zone.
+     */
+    private static void preserveSourceCountOutsideSafeZones(
+            List<GlyphPoint> points,
+            int runtimeStart,
+            int width,
+            int height,
+            int seed
+    ) {
+        if (runtimeStart >= points.size()) return;
+        List<GlyphPoint> accepted = new ArrayList<>(points.size() - runtimeStart);
+        List<GlyphPoint> rejected = new ArrayList<>();
+        for (int index = runtimeStart; index < points.size(); index++) {
+            GlyphPoint point = points.get(index);
+            if (isRuntimeSafeZone(point.x, point.y, width, height)) rejected.add(point);
+            else accepted.add(point);
+        }
+        if (rejected.isEmpty()) return;
+
+        points.subList(runtimeStart, points.size()).clear();
+        points.addAll(accepted);
+        for (int index = 0; index < rejected.size(); index++) {
+            GlyphPoint point = rejected.get(index);
+            points.add(new GlyphPoint(
+                    safeReplacementX(width, seed, index),
+                    safeReplacementY(height, seed, index),
+                    point.glyph,
+                    point.alpha,
+                    point.size
+            ));
+        }
+    }
+
+    private static boolean isRuntimeSafeZone(
+            float x,
+            float y,
+            int width,
+            int height
+    ) {
+        boolean clock = x >= width * CLOCK_SAFE_LEFT
+                && x <= width * CLOCK_SAFE_RIGHT
+                && y <= height * CLOCK_SAFE_BOTTOM;
+        boolean gesture = x >= width * GESTURE_SAFE_LEFT
+                && x <= width * GESTURE_SAFE_RIGHT
+                && y >= height * GESTURE_SAFE_TOP;
+        return clock || gesture;
+    }
+
+    private static float safeReplacementX(int width, int seed, int index) {
+        float inset = 0.035f + GlyphMath.hash(index, seed, 17f) * 0.070f;
+        return GlyphMath.hash(seed, index, 23f) < 0.5f
+                ? width * inset
+                : width * (1f - inset);
+    }
+
+    private static float safeReplacementY(int height, int seed, int index) {
+        return height * (0.16f + GlyphMath.hash(index, seed, 31f) * 0.72f);
+    }
+
     private static float[][] fullScreenNodes(int width, int height) {
         return new float[][] {
                 { width * 0.075f, height * 0.18f },
@@ -1077,30 +1244,47 @@ final class GlyphSceneRenderer {
         paint.setTypeface(MONO);
         paint.setTextAlign(Paint.Align.CENTER);
 
-        int tintRed = Color.red(theme.atmosphereColor);
-        int tintGreen = Color.green(theme.atmosphereColor);
-        int tintBlue = Color.blue(theme.atmosphereColor);
+        int secondaryColor = fluidSecondaryColor(theme.atmosphereColor);
+        int tertiaryColor = fluidTertiaryColor(theme.atmosphereColor);
         char[] one = new char[1];
         for (GlyphPoint point : points) {
+            float hueWave = 0.5f + 0.5f * (float) Math.sin(
+                    point.y * 0.0044f + point.x * 0.0018f + theme.ordinal() * 0.63f
+            );
+            int localTint = mixColor(
+                    theme.atmosphereColor,
+                    secondaryColor,
+                    0.10f + point.alpha * hueWave * 0.62f
+            );
             if (point.alpha > 0.74f) {
-                paint.setColor(theme.atmosphereColor);
-                paint.setAlpha(Math.round(12f + point.alpha * 18f));
-                paint.setTextSize(point.size * 1.52f);
+                paint.setColor(mixColor(localTint, tertiaryColor, 0.34f));
+                paint.setAlpha(Math.round(14f + point.alpha * 26f));
+                paint.setTextSize(point.size * 1.64f);
                 one[0] = point.glyph;
                 canvas.drawText(one, 0, 1, point.x, point.y, paint);
             }
 
             int value = Math.round(92 + 160 * point.alpha);
-            float tintMix = 0.16f + point.alpha * 0.20f;
+            float tintMix = 0.26f + point.alpha * 0.40f;
             paint.setColor(Color.rgb(
-                    Math.round(GlyphMath.mix(value, tintRed, tintMix)),
-                    Math.round(GlyphMath.mix(value, tintGreen, tintMix)),
-                    Math.round(GlyphMath.mix(value, tintBlue, tintMix))
+                    Math.round(GlyphMath.mix(value, Color.red(localTint), tintMix)),
+                    Math.round(GlyphMath.mix(value, Color.green(localTint), tintMix)),
+                    Math.round(GlyphMath.mix(value, Color.blue(localTint), tintMix))
             ));
             paint.setAlpha(Math.round((0.16f + point.alpha * 0.84f) * 246f));
             paint.setTextSize(point.size * 1.04f);
             one[0] = point.glyph;
             canvas.drawText(one, 0, 1, point.x, point.y, paint);
+
+            // A few high-value cells become white-hot anchors. The larger tinted pass above
+            // supplies bloom; this smaller pass preserves the crisp code-like core.
+            if (point.alpha > 0.88f
+                    && GlyphMath.hash(point.x, point.y, theme.ordinal() + 71f) > 0.95f) {
+                paint.setColor(mixColor(localTint, Color.WHITE, 0.70f));
+                paint.setAlpha(Math.round(54f + point.alpha * 94f));
+                paint.setTextSize(point.size * 0.88f);
+                canvas.drawText(one, 0, 1, point.x, point.y, paint);
+            }
         }
 
         Paint atmosphere = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -1109,8 +1293,8 @@ final class GlyphSceneRenderer {
                 height * theme.atmosphereY,
                 width * 0.76f,
                 new int[] {
-                        withAlpha(theme.atmosphereColor, 30),
-                        withAlpha(theme.atmosphereColor, 9),
+                        withAlpha(mixColor(theme.atmosphereColor, secondaryColor, 0.28f), 37),
+                        withAlpha(tertiaryColor, 11),
                         Color.TRANSPARENT
                 },
                 new float[] { 0f, 0.48f, 1f },
@@ -1127,6 +1311,8 @@ final class GlyphSceneRenderer {
 
     private static List<AmbientGlyph> buildAmbientGlyphs(
             List<GlyphPoint> points,
+            int width,
+            int height,
             DemoCatalog.Theme theme,
             RenderQuality quality
     ) {
@@ -1137,16 +1323,64 @@ final class GlyphSceneRenderer {
         int desired = Math.round(980f * quality.liveDensity);
         int count = Math.min(desired, candidates.size());
         List<AmbientGlyph> live = new ArrayList<>(count);
+        float focusX = width * theme.atmosphereX;
+        float focusY = height * theme.atmosphereY;
+        float toReferenceX = FLUID_REFERENCE_WIDTH / Math.max(1f, width);
+        float toReferenceY = FLUID_REFERENCE_HEIGHT / Math.max(1f, height);
+        float twoPi = (float) (Math.PI * 2.0);
         for (int i = 0; i < count; i++) {
-            GlyphPoint point = candidates.get((i * 97 + theme.ordinal() * 53) % candidates.size());
+            GlyphPoint point = candidates.get(
+                    (i * 97 + theme.name().length() * 53) % candidates.size()
+            );
+            float referenceX = point.x * toReferenceX;
+            float referenceY = point.y * toReferenceY;
+            float phase = GlyphMath.hash(i, referenceX, referenceY) * twoPi;
+            float depth = 0.25f + 0.75f * GlyphMath.hash(referenceY, i, 11f);
+
+            // The browser lab expresses the shared curl field in a 1080x2400 reference space.
+            // Store trig bases once; draw-time angle-addition identities reuse frame-level time
+            // samples instead of evaluating eight sine/cosine terms per glyph and frame.
+            float largeXPhase = referenceX * 0.0036f + phase * 0.18f;
+            float largeYPhase = referenceY * 0.0027f - phase * 0.11f;
+            float fineXPhase = referenceX * 0.0107f + phase * 0.47f;
+            float fineYPhase = referenceY * 0.0081f - phase * 0.39f;
+            float largeSumPhase = largeXPhase + largeYPhase;
+            float largeDifferencePhase = largeXPhase - largeYPhase;
+            float fineSumPhase = fineXPhase + fineYPhase;
+            float fineDifferencePhase = fineXPhase - fineYPhase;
+            boolean glitchEligible = GlyphMath.hash(referenceX, referenceY, 91f) > 0.973f;
             live.add(new AmbientGlyph(
                     point.x,
                     point.y,
                     point.glyph,
                     point.size,
                     point.alpha,
-                    GlyphMath.hash(i, point.x, point.y) * (float) Math.PI * 2f,
-                    0.25f + 0.75f * GlyphMath.hash(point.y, i, 11f)
+                    phase,
+                    depth,
+                    (float) Math.hypot(point.x - focusX, point.y - focusY),
+                    0.34f + 0.66f * (1f - point.alpha),
+                    point.y + point.x * 0.24f,
+                    phase / twoPi * 0.31f
+                            + point.x / Math.max(1f, width) * 0.18f
+                            + point.y / Math.max(1f, height) * 0.11f,
+                    (float) Math.sin(largeSumPhase),
+                    (float) Math.cos(largeSumPhase),
+                    (float) Math.sin(largeDifferencePhase),
+                    (float) Math.cos(largeDifferencePhase),
+                    (float) Math.sin(fineSumPhase),
+                    (float) Math.cos(fineSumPhase),
+                    (float) Math.sin(fineDifferencePhase),
+                    (float) Math.cos(fineDifferencePhase),
+                    (float) Math.sin(phase),
+                    (float) Math.cos(phase),
+                    (float) Math.sin(phase * 0.7f),
+                    (float) Math.cos(phase * 0.7f),
+                    glitchEligible,
+                    GlyphMath.hash(referenceY, referenceX, 103f) > 0.5f ? 1f : -1f,
+                    GlyphMath.hash(referenceX, referenceY, 107f) - 0.5f,
+                    GlyphMath.hash(i, referenceX, 191f) > 0.835f,
+                    GlyphMath.hash(i, referenceY, 193f) > 0.945f,
+                    GlyphMath.hash(referenceX, i, 197f) > 0.89f
             ));
         }
         return live;
@@ -1493,6 +1727,7 @@ final class GlyphSceneRenderer {
             DemoCatalog.Event event,
             boolean result
     ) {
+        int runtimeStart = targets.size();
         int color = mixColor(theme.atmosphereColor, event.accent, result ? 0.64f : 0.50f);
         float size = width * 0.0108f;
         float left = width * 0.035f;
@@ -1678,6 +1913,13 @@ final class GlyphSceneRenderer {
                 break;
             }
         }
+        preserveTargetCountOutsideSafeZones(
+                targets,
+                runtimeStart,
+                width,
+                height,
+                seed + 9000
+        );
     }
 
     /**
@@ -2316,6 +2558,41 @@ final class GlyphSceneRenderer {
         targets.add(new TargetGlyph(x, y, glyph, size, alpha, color, false, TargetRole.STRUCTURE));
     }
 
+    /** Applies the same protected regions to focused runtime hardware without changing count. */
+    private static void preserveTargetCountOutsideSafeZones(
+            List<TargetGlyph> targets,
+            int runtimeStart,
+            int width,
+            int height,
+            int seed
+    ) {
+        if (runtimeStart >= targets.size()) return;
+        List<TargetGlyph> accepted = new ArrayList<>(targets.size() - runtimeStart);
+        List<TargetGlyph> rejected = new ArrayList<>();
+        for (int index = runtimeStart; index < targets.size(); index++) {
+            TargetGlyph target = targets.get(index);
+            if (isRuntimeSafeZone(target.x, target.y, width, height)) rejected.add(target);
+            else accepted.add(target);
+        }
+        if (rejected.isEmpty()) return;
+
+        targets.subList(runtimeStart, targets.size()).clear();
+        targets.addAll(accepted);
+        for (int index = 0; index < rejected.size(); index++) {
+            TargetGlyph target = rejected.get(index);
+            targets.add(new TargetGlyph(
+                    safeReplacementX(width, seed, index),
+                    safeReplacementY(height, seed, index),
+                    target.glyph,
+                    target.size,
+                    target.alpha,
+                    target.color,
+                    target.text,
+                    target.role
+            ));
+        }
+    }
+
     private static FittedLines fitWrappedLines(
             Paint paint,
             String text,
@@ -2817,8 +3094,16 @@ final class GlyphSceneRenderer {
         float result = frame.resultProgress;
         float handoff = GlyphMath.smooth(reveal / 0.16f);
         boolean retargeting = frame.eventProgress < 0.999f;
-        float[] motionPoint = new float[2];
+        float[] motionPoint = scene.motionScratch;
         List<MorphGlyph> morphGlyphs = scene.morphGlyphs;
+        float paletteProgress = retargeting ? frame.eventProgress : reveal;
+        int paletteBridge = mixColor(
+                scene.theme.atmosphereColor,
+                scene.accent,
+                0.18f * GlyphMath.clamp01(paletteProgress)
+        );
+        int secondaryColor = fluidSecondaryColor(paletteBridge);
+        int tertiaryColor = fluidTertiaryColor(paletteBridge);
 
         for (int glyphIndex = 0; glyphIndex < morphGlyphs.size(); glyphIndex++) {
             MorphGlyph glyph = morphGlyphs.get(glyphIndex);
@@ -2941,9 +3226,24 @@ final class GlyphSceneRenderer {
             float originAlpha = retargeting
                     ? glyph.previousTarget.alpha
                     : glyph.source.alpha * 0.94f;
-            int originColor = retargeting
-                    ? glyph.previousTarget.color
-                    : scene.theme.atmosphereColor;
+            int originColor;
+            if (eventBlend >= 0.999f) {
+                // The origin is fully discarded at this point; avoid a sine and color mix
+                // for every settled particle during the operational tail.
+                originColor = glyph.eventTarget.color;
+            } else if (retargeting) {
+                originColor = glyph.previousTarget.color;
+            } else {
+                float originHue = 0.5f + 0.5f * (float) Math.sin(
+                        glyph.source.y * 0.0042f + glyph.source.x * 0.0015f
+                                - seconds * 0.27f + glyph.phase * 0.19f
+                );
+                originColor = mixColor(
+                        scene.theme.atmosphereColor,
+                        secondaryColor,
+                        0.10f + originHue * 0.62f
+                );
+            }
             float size = GlyphMath.mix(originSize, glyph.eventTarget.size, eventBlend);
             size = GlyphMath.mix(size, glyph.resultTarget.size, resultBlend);
             float alpha = GlyphMath.mix(originAlpha, glyph.eventTarget.alpha, eventBlend);
@@ -2953,8 +3253,29 @@ final class GlyphSceneRenderer {
                         * (float) Math.sin(seconds * 2.4f + glyph.phase));
                 alpha *= operationalPulse;
             }
-            int eventColor = mixColor(originColor, glyph.eventTarget.color, eventBlend);
-            int finalColor = mixColor(eventColor, glyph.resultTarget.color, resultBlend);
+            int eventColor = eventBlend >= 0.999f
+                    ? glyph.eventTarget.color
+                    : mixColor(originColor, glyph.eventTarget.color, eventBlend);
+            int finalColor = resultBlend <= 0.001f
+                    ? eventColor
+                    : mixColor(eventColor, glyph.resultTarget.color, resultBlend);
+            if (!activeTarget.text) {
+                float structureHue = 0.5f + 0.5f * (float) Math.sin(
+                        seconds * 0.31f + activeTarget.y * 0.0040f + glyph.phase * 0.37f
+                );
+                int movingStructureColor = mixColor(
+                        secondaryColor,
+                        tertiaryColor,
+                        structureHue
+                );
+                // The hardware retains a low-amplitude color current after settling; semantic
+                // strokes deliberately skip this branch and remain stationary and neutral.
+                finalColor = mixColor(
+                        finalColor,
+                        movingStructureColor,
+                        0.10f + 0.10f * (1f - eventBlend)
+                );
+            }
 
             // Semantic glyphs briefly bloom as they lock to the baseline, then become perfectly
             // still and crisp for reading. Structural glyphs settle more quietly.
@@ -2981,7 +3302,7 @@ final class GlyphSceneRenderer {
                 float echoY = GlyphMath.mix(originY, eventY, 0.72f);
                 paint.setFakeBoldText(false);
                 paint.setTextSize(GlyphMath.mix(originSize, size, 0.56f));
-                paint.setColor(mixColor(scene.theme.atmosphereColor, finalColor, 0.34f));
+                paint.setColor(mixColor(secondaryColor, finalColor, 0.42f));
                 paint.setAlpha(Math.min(255, Math.round(alpha * trailVisibility * 255f)));
                 one[0] = retargeting ? glyph.previousTarget.glyph : glyph.source.glyph;
                 canvas.drawText(one, 0, 1, echoX, echoY, paint);
@@ -3005,7 +3326,11 @@ final class GlyphSceneRenderer {
             } else if (!activeTarget.text && alpha > 0.42f && glyphIndex % 5 == 0) {
                 paint.setFakeBoldText(false);
                 paint.setTextSize(size * 1.42f);
-                paint.setColor(mixColor(scene.accent, finalColor, 0.52f));
+                paint.setColor(mixColor(
+                        finalColor,
+                        scene.accent,
+                        0.48f * GlyphMath.smooth(semanticProgress)
+                ));
                 paint.setAlpha(Math.min(255, Math.round(alpha * 0.10f * 255f)));
                 one[0] = result > 0.45f
                         ? glyph.resultTarget.glyph
@@ -3296,9 +3621,13 @@ final class GlyphSceneRenderer {
         float seconds = nowMs / 1000f;
         float focusX = scene.width * scene.theme.atmosphereX;
         float focusY = scene.height * scene.theme.atmosphereY;
-        int red = Color.red(scene.theme.atmosphereColor);
-        int green = Color.green(scene.theme.atmosphereColor);
-        int blue = Color.blue(scene.theme.atmosphereColor);
+        int primaryColor = scene.theme.atmosphereColor;
+        int secondaryColor = fluidSecondaryColor(primaryColor);
+        int tertiaryColor = fluidTertiaryColor(primaryColor);
+        int coreColor = mixColor(tertiaryColor, Color.WHITE, 0.58f);
+        float fluidScale = scene.width / FLUID_REFERENCE_WIDTH;
+        float toReferenceX = FLUID_REFERENCE_WIDTH / Math.max(1f, scene.width);
+        float toReferenceY = FLUID_REFERENCE_HEIGHT / Math.max(1f, scene.height);
         float wakeRadius = GlyphMath.mix(
                 scene.width * 0.02f,
                 scene.width * 0.92f,
@@ -3308,11 +3637,34 @@ final class GlyphSceneRenderer {
         float fade = 1f - GlyphMath.smooth(frame.revealProgress / 0.54f);
         if (fade <= 0.001f && wakeStrength <= 0.001f) return;
 
-        for (AmbientGlyph glyph : scene.ambientGlyphs) {
+        // Shared cinematic-profile band constants are expressed in the browser lab's reference
+        // space, then scaled into the render surface. These values are frame-constant.
+        float energySpan = scene.height + scene.width * 0.44f;
+        float energyPosition = ((seconds * 92f + scene.theme.name().length() * 71f)
+                * fluidScale) % energySpan - scene.width * 0.16f;
+        float energySigma = Math.max(1f, 72f * fluidScale);
+        float wakeSigma = Math.max(1f, 86f * fluidScale);
+        float echoThreshold = 1.2f * fluidScale;
+        float echoThresholdSquared = echoThreshold * echoThreshold;
+        float largeSumTimeSin = (float) Math.sin(seconds * 0.03f);
+        float largeSumTimeCos = (float) Math.cos(seconds * 0.03f);
+        float largeDifferenceTimeSin = (float) Math.sin(seconds * 0.23f);
+        float largeDifferenceTimeCos = (float) Math.cos(seconds * 0.23f);
+        float fineSumTimeSin = (float) Math.sin(-seconds * 0.07f);
+        float fineSumTimeCos = (float) Math.cos(-seconds * 0.07f);
+        float fineDifferenceTimeSin = (float) Math.sin(-seconds * 0.55f);
+        float fineDifferenceTimeCos = (float) Math.cos(-seconds * 0.55f);
+        float energyXTimeSin = (float) Math.sin(seconds * 0.8f);
+        float energyXTimeCos = (float) Math.cos(seconds * 0.8f);
+        float energyYTimeSin = (float) Math.sin(seconds * 0.6f);
+        float energyYTimeCos = (float) Math.cos(seconds * 0.6f);
+
+        for (int glyphIndex = 0; glyphIndex < scene.ambientGlyphs.size(); glyphIndex++) {
+            AmbientGlyph glyph = scene.ambientGlyphs.get(glyphIndex);
             float strength = scene.theme.motionStrength * glyph.depth;
             float vx = glyph.x - focusX;
             float vy = glyph.y - focusY;
-            float radius = Math.max(1f, (float) Math.hypot(vx, vy));
+            float radius = Math.max(1f, glyph.radius);
             float x = glyph.x;
             float y = glyph.y;
 
@@ -3324,20 +3676,24 @@ final class GlyphSceneRenderer {
                     float sa = (float) Math.sin(angle);
                     x = focusX + vx * ca - vy * sa;
                     y = focusY + vx * sa + vy * ca;
-                    x += (float) Math.sin(seconds * 0.72f + glyph.phase) * 2.4f * strength;
+                    x += (float) Math.sin(seconds * 0.72f + glyph.phase)
+                            * 2.4f * fluidScale * strength;
                     break;
                 }
                 case CIRCUIT: {
                     float lane = ((seconds * 22f * (0.35f + glyph.depth) + glyph.phase * 40f) % 92f) - 46f;
-                    y += lane * 0.18f * strength;
-                    if (Math.sin(seconds * 1.4f + glyph.phase) > 0.74f) x += 7f * strength;
+                    y += lane * 0.18f * fluidScale * strength;
+                    if (Math.sin(seconds * 1.4f + glyph.phase) > 0.74f) {
+                        x += 7f * fluidScale * strength;
+                    }
                     break;
                 }
                 case RADIAL: {
                     float scale = 1f + (float) Math.sin(seconds * 0.82f + glyph.phase) * 0.0068f * strength;
                     x = focusX + vx * scale;
                     y = focusY + vy * scale;
-                    float tangent = (float) Math.sin(seconds * 0.5f + glyph.phase) * 4.2f * strength;
+                    float tangent = (float) Math.sin(seconds * 0.5f + glyph.phase)
+                            * 4.2f * fluidScale * strength;
                     x += -vy / radius * tangent;
                     y += vx / radius * tangent;
                     break;
@@ -3345,43 +3701,169 @@ final class GlyphSceneRenderer {
                 case BLOOM: {
                     float angle = (float) Math.atan2(vy, vx);
                     float petal = (float) Math.sin(angle * 6f + seconds * 0.66f + glyph.phase)
-                            * 6.5f * strength;
+                            * 6.5f * fluidScale * strength;
                     float scale = 1f + petal / Math.max(scene.width * 0.18f, radius) * 0.42f;
                     x = focusX + vx * scale;
                     y = focusY + vy * scale;
                     break;
                 }
                 case WAVE:
-                    x += (float) Math.sin(seconds * 0.58f + glyph.y * 0.010f + glyph.phase)
-                            * 5.8f * strength;
-                    y += (float) Math.sin(seconds * 0.41f + glyph.x * 0.008f - glyph.phase)
-                            * 3.7f * strength;
+                    x += (float) Math.sin(
+                            seconds * 0.52f + glyph.y * toReferenceY * 0.010f + glyph.phase
+                    )
+                            * 5.2f * fluidScale * strength;
+                    y += (float) Math.sin(
+                            seconds * 0.36f + glyph.x * toReferenceX * 0.008f - glyph.phase
+                    )
+                            * 3.7f * fluidScale * strength;
                     break;
                 case FOLD: {
                     float depth = (glyph.y - focusY) / Math.max(1f, scene.height);
-                    float fold = (float) Math.sin(seconds * 0.34f + glyph.phase) * 5.2f * strength;
-                    x += fold * (0.35f + Math.abs(depth));
-                    y += (float) Math.cos(seconds * 0.28f + glyph.phase * 1.3f) * 2.2f * strength;
+                    float fold = (float) Math.sin(seconds * 0.32f + glyph.phase)
+                            * Math.abs(depth) * 8.5f * fluidScale * strength;
+                    x += fold * (glyph.energyPhaseSin >= 0f ? 1f : -1f);
+                    y += (float) Math.cos(seconds * 0.27f + glyph.phase)
+                            * 1.7f * fluidScale * strength;
                     break;
                 }
                 case FLOW:
                 default:
-                    x += (float) Math.sin(seconds * 0.55f + glyph.y * 0.006f + glyph.phase)
-                            * 5.5f * strength;
-                    y += (float) Math.cos(seconds * 0.38f + glyph.x * 0.005f + glyph.phase)
-                            * 3.2f * strength;
+                    x += (float) Math.sin(
+                            seconds * 0.55f + glyph.y * toReferenceY * 0.006f + glyph.phase
+                    )
+                            * 5.5f * fluidScale * strength;
+                    y += (float) Math.cos(
+                            seconds * 0.38f + glyph.x * toReferenceX * 0.005f + glyph.phase
+                    )
+                            * 3.2f * fluidScale * strength;
                     break;
             }
 
-            float wakeDistance = (radius - wakeRadius) / Math.max(1f, scene.width * 0.08f);
+            // The lab's two divergence-like fields are evaluated through product identities and
+            // precomputed angle-addition terms. Bright core cells retain lower mobility so the
+            // hero silhouette remains recognizable.
+            float largeSum = glyph.largeCurlSumSin * largeSumTimeCos
+                    + glyph.largeCurlSumCos * largeSumTimeSin;
+            float largeDifference = glyph.largeCurlDifferenceSin * largeDifferenceTimeCos
+                    + glyph.largeCurlDifferenceCos * largeDifferenceTimeSin;
+            float fineSum = glyph.fineCurlSumSin * fineSumTimeCos
+                    + glyph.fineCurlSumCos * fineSumTimeSin;
+            float fineDifference = glyph.fineCurlDifferenceSin * fineDifferenceTimeCos
+                    + glyph.fineCurlDifferenceCos * fineDifferenceTimeSin;
+            float curlLargeX = 0.5f * (largeSum + largeDifference);
+            float curlLargeY = 0.5f * (largeDifference - largeSum);
+            float curlFineX = 0.5f * (fineSum + fineDifference);
+            float curlFineY = 0.5f * (fineDifference - fineSum);
+            float curlGain = strength * (0.64f + glyph.depth * 0.36f) * glyph.edgeMobility;
+            x += (curlLargeX * 5.8f + curlFineX * 1.9f) * fluidScale * curlGain;
+            y += (curlLargeY * 4.5f + curlFineY * 1.5f) * fluidScale * curlGain;
+
+            // Eligibility, direction, and jitter are immutable scene data. Only the sparse
+            // eligible subset pays for a sine evaluation on a frame where a scan tear can occur.
+            float glitchPulse = 0f;
+            if (glyph.glitchEligible) {
+                glitchPulse = GlyphMath.smooth(((float) Math.sin(
+                        seconds * (1.75f + glyph.depth * 0.42f) + glyph.phase * 2.8f
+                ) - 0.82f) / 0.18f);
+                x += glyph.glitchDirection * glitchPulse * (6f + glyph.depth * 11f)
+                        * fluidScale * glyph.edgeMobility;
+                y += glitchPulse * glyph.glitchJitter * 3.2f * fluidScale;
+            }
+
+            float wakeDistance = (radius - wakeRadius) / wakeSigma;
             float wakeBand = (float) Math.exp(-wakeDistance * wakeDistance) * wakeStrength;
+            float energyDistance = (glyph.energyCoordinate - energyPosition) / energySigma;
+            float rawEnergyBand = (float) Math.exp(-energyDistance * energyDistance * 0.5f);
+            float energyBand = rawEnergyBand * Math.max(fade, wakeStrength * 0.34f);
+            float energyXWave = glyph.energyPhaseSin * energyXTimeCos
+                    + glyph.energyPhaseCos * energyXTimeSin;
+            float energyYWave = glyph.energyPhaseScaledCos * energyYTimeCos
+                    + glyph.energyPhaseScaledSin * energyYTimeSin;
+            x += energyXWave * energyBand * 4.8f * fluidScale * strength;
+            y -= energyYWave * energyBand * 3.1f * fluidScale * strength;
+
             float twinkle = 0.58f + 0.42f
                     * (float) Math.sin(seconds * (1.1f + glyph.depth) + glyph.phase);
-            float alpha = fade * (0.045f + glyph.alpha * 0.24f)
-                    * (0.72f + twinkle * 0.28f) + wakeBand * 0.46f;
+            float alpha = Math.min(
+                    0.44f,
+                    fade * (0.034f + glyph.alpha * 0.22f) * (0.72f + twinkle * 0.28f)
+                            + energyBand * (0.050f + glyph.alpha * 0.075f)
+                            + wakeBand * 0.34f
+            );
             if (alpha <= 0.015f) continue;
-            paint.setTextSize(glyph.size * (1f + wakeBand * 0.12f));
-            paint.setColor(Color.rgb(red, green, blue));
+
+            int liveColor = fluidPaletteColor(
+                    primaryColor,
+                    secondaryColor,
+                    tertiaryColor,
+                    seconds * 0.026f + glyph.palettePhase
+            );
+            liveColor = mixColor(
+                    liveColor,
+                    coreColor,
+                    Math.min(0.52f, energyBand * 0.46f + wakeBand * 0.24f)
+            );
+            float glyphSize = glyph.size * (1f + wakeBand * 0.10f + energyBand * 0.075f);
+            paint.setTextSize(glyphSize);
+
+            float motionX = x - glyph.x;
+            float motionY = y - glyph.y;
+            float displacementSquared = motionX * motionX + motionY * motionY;
+            if (glyph.echo && displacementSquared > echoThresholdSquared) {
+                int echoColor = mixColor(tertiaryColor, liveColor, 0.36f);
+                float echoAlpha = Math.min(
+                        0.048f,
+                        alpha * (0.085f + glyph.depth * 0.065f) * (1f + energyBand * 0.7f)
+                );
+                paint.setColor(echoColor);
+                paint.setAlpha(Math.min(255, Math.round(echoAlpha * 255f)));
+                one[0] = glyph.glyph;
+                canvas.drawText(
+                        one,
+                        0,
+                        1,
+                        x - motionX * 0.58f,
+                        y - motionY * 0.58f,
+                        paint
+                );
+                if (energyBand > 0.28f && glyph.secondaryEcho) {
+                    paint.setColor(secondaryColor);
+                    paint.setAlpha(Math.min(255, Math.round(echoAlpha * 0.38f * 255f)));
+                    canvas.drawText(
+                            one,
+                            0,
+                            1,
+                            x - motionX * 0.91f,
+                            y - motionY * 0.91f,
+                            paint
+                    );
+                }
+            }
+            if (glitchPulse > 0.05f) {
+                float glitchAlpha = Math.min(0.065f, alpha * glitchPulse * 0.26f);
+                paint.setColor(tertiaryColor);
+                paint.setAlpha(Math.min(255, Math.round(glitchAlpha * 255f)));
+                one[0] = glyph.glyph;
+                canvas.drawText(
+                        one,
+                        0,
+                        1,
+                        x - glyph.glitchDirection * (4f + glitchPulse * 4f) * fluidScale,
+                        y,
+                        paint
+                );
+            }
+
+            if (energyBand > 0.34f && glyph.depth > 0.48f && glyph.glow) {
+                paint.setTextSize(glyphSize * (1.24f + energyBand * 0.16f));
+                paint.setColor(coreColor);
+                paint.setAlpha(Math.min(255, Math.round(Math.min(0.045f, energyBand * 0.040f) * 255f)));
+                one[0] = glyph.glyph;
+                canvas.drawText(one, 0, 1, x, y, paint);
+                paint.setTextSize(glyphSize);
+            }
+
+            paint.setColor(liveColor);
             paint.setAlpha(Math.min(255, Math.round(alpha * 255f)));
             one[0] = glyph.glyph;
             canvas.drawText(one, 0, 1, x, y, paint);
@@ -3469,6 +3951,33 @@ final class GlyphSceneRenderer {
             else high = mid;
         }
         return low;
+    }
+
+    /** Derives the violet/magenta end of a theme's ambient color journey. */
+    private static int fluidSecondaryColor(int primary) {
+        return Color.rgb(
+                Math.round(GlyphMath.mix(Color.red(primary), 255f, 0.18f)),
+                Math.round(GlyphMath.mix(Color.green(primary), 72f, 0.58f)),
+                Math.round(GlyphMath.mix(Color.blue(primary), 255f, 0.66f))
+        );
+    }
+
+    /** Derives the cyan specular end used by traveling energy bands and sparse hot cells. */
+    private static int fluidTertiaryColor(int primary) {
+        return Color.rgb(
+                Math.round(GlyphMath.mix(Color.red(primary), 70f, 0.55f)),
+                Math.round(GlyphMath.mix(Color.green(primary), 220f, 0.55f)),
+                Math.round(GlyphMath.mix(Color.blue(primary), 255f, 0.55f))
+        );
+    }
+
+    /** Three-stop traveling palette shared with the cinematic browser profile. */
+    private static int fluidPaletteColor(int primary, int secondary, int tertiary, float phase) {
+        float wrapped = phase - (float) Math.floor(phase);
+        if (wrapped < 0.5f) {
+            return mixColor(primary, secondary, GlyphMath.smooth(wrapped * 2f));
+        }
+        return mixColor(secondary, tertiary, GlyphMath.smooth((wrapped - 0.5f) * 2f));
     }
 
     private static int mixColor(int a, int b, float t) {

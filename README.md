@@ -38,6 +38,14 @@ readability, and purposeful choreography explicit requirements.
 
 Version 0.9 adds:
 
+- **Fluid topology skin:** slow curl fields, traveling energy bands, brief scan tears, and sparse
+  source-glyph echoes create continuous motion without introducing a video or background layer.
+- **Neon depth:** each authored tint expands into a restrained cyan/violet companion range, with
+  white-hot landmark cells and bounded phosphor bloom around the existing glyph material.
+- **Real negative space:** stochastic dust is sparse and intentional; hero silhouettes no longer
+  sit inside a uniform field of low-value glyph noise.
+- **Visible-only ambient life:** Android keeps ambient art moving at a restrained 8 fps while the
+  wallpaper is visible, then stops with the surface; settled semantic text remains frozen.
 - **Full-screen ASCII systems:** source and focused topology reaches the physical screen edges and
   corners while preserving clock and gesture safe zones.
 - **Operational identities:** defense, reactor, navigation, network, biometric, vault, temporal,
@@ -56,7 +64,8 @@ Version 0.9 adds:
 - **Long-travel penalties:** the solver avoids visually implausible cross-screen movement.
 - **Identity floors:** deformation is strongest near semantic content and restrained elsewhere, keeping the wallpaper recognizable at full reveal.
 - **Transport echoes:** faint source-glyph afterimages expose the path from artwork into language without introducing a second layer.
-- **Adaptive frame budgets:** transitions update at 16 ms, ambient life at 42 ms, and settled reading states at 66 ms.
+- **Adaptive frame budgets:** transitions update at 33 ms, ambient life at 125 ms, and brief
+  operational tails at 66 ms; settled reading states stop scheduling frames.
 - **Parallel procedural generation:** selective and incremental mask generation dramatically shortens the design loop.
 - **Three new composition grammars:** dial, cascade, and constellation.
 - **Four new signature systems:** Chrono Loom, Muon Chamber, Vector Shrine, and Lagrange Garden.
@@ -177,7 +186,8 @@ docs/               Architecture, grammar, reviews, and acceptance gates
 
 ```bash
 python -m pip install -r scripts/requirements.txt
-python scripts/generate_scene_masks.py --jobs 3
+python scripts/generate_scene_masks.py --jobs 2
+python scripts/generate_scene_masks.py --validate-only
 python scripts/check_morph_first.py
 python scripts/check_semantic_composition.py
 python scripts/check_transport_integrity.py
@@ -206,7 +216,8 @@ Requirements:
 
 ```bash
 python -m pip install -r scripts/requirements.txt
-python scripts/generate_scene_masks.py --jobs 3
+python scripts/generate_scene_masks.py --jobs 2
+python scripts/generate_scene_masks.py --validate-only
 cd apps/android
 gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
